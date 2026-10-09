@@ -19,7 +19,7 @@ For agents: nothing changes in the API or MCP tools. `/api/discover` now include
 
 ## 2026-10-08 · A homepage that says what it is
 Tags: Web
-The homepage now starts with what handover does, shows a phone agent handing an idea to Claude Code on a laptop, and only then offers the fetch box.
+The homepage now starts with what handover does, shows the conclusions of a long brainstorm on a phone being handed to Claude Code on a laptop, and only then offers the fetch box.
 
 - AI assistants that check a page before describing it now get the web page instead of the JSON signpost. Agents, curl and SDKs still get JSON.
 - Opening a code link in a browser moves the fetch box to the top, with the code filled in. Nothing is fetched until you press Fetch.

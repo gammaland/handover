@@ -38,6 +38,9 @@ _CSS = """
   /* Each side looks like its own client: phone chat vs terminal, so you can tell they are two different agents without reading */
   .msg { margin: 0; font-size: 14.5px; line-height: 1.45; max-width: none; padding: 8px 12px; }
   .msg + .msg { margin-top: 8px; }
+  /* The brainstorm before the handoff: many rounds happened in this app, and only the conclusions travel */
+  .earlier { margin: 0 0 10px; text-align: center; font: 500 12px/1.3 var(--sans); color: var(--ink-tertiary); max-width: none; }
+  .earlier::before, .earlier::after { content: "·"; margin: 0 8px; }
   .msg.you {
     margin-left: 14%; background: rgba(0, 115, 245, .12); color: var(--ink-primary);
     border-radius: 16px 16px 4px 16px;
@@ -252,13 +255,14 @@ _BODY = f"""
 <section class="hero">
   <p class="eyebrow">No account · No install · Any agent</p>
   <h1>Hand work from one AI agent to another.</h1>
-  <p class="lede">An idea comes to you in the agent on your phone; your context lives with the agent on your laptop.
-  Say one sentence, carry 8 letters across, and the other agent picks it up. Read once, then gone.</p>
-  <div class="demo" aria-label="Example: an idea from Muse on a phone to Claude Code on a laptop">
+  <p class="lede">Brainstorm wherever it's easy, for as many rounds as it takes. Then hand the conclusions to the
+  agent that has your history. One sentence, 8 letters, read once.</p>
+  <div class="demo" aria-label="Example: the conclusions of a long brainstorm in Muse on a phone, handed to Claude Code on a laptop">
     <figure class="device">
       <figcaption>{icons.ICON_PHONE} Phone<span class="client"><img src="/img/client-muse.png" alt="" width="20" height="20">Muse</span></figcaption>
-      <p class="msg you">New idea: turn my weekly notes into a one-page digest. Hand this over with handover.tools.</p>
-      <p class="msg agent">Done. On your laptop, say <span class="code8">handover.tools/kvmtrhxp</span></p>
+      <p class="earlier">23 earlier messages</p>
+      <p class="msg you">OK, down to two: invoice chasing for freelancers, or a changelog widget. Hand this over with handover.tools.</p>
+      <p class="msg agent">Done: 6 ideas, 2 finalists and why. On your laptop, say <span class="code8">handover.tools/kvmtrhxp</span></p>
     </figure>
     <div class="hop" aria-hidden="true">{icons.ICON_ARROW_RIGHT}<span>8 letters</span></div>
     <figure class="device">
@@ -266,8 +270,8 @@ _BODY = f"""
       <div class="term">
         <p class="prompt">&gt; <span class="code8">handover.tools/kvmtrhxp</span></p>
         <p class="line"><span class="dot ok">⏺</span>Fetch(handover.tools/kvmtrhxp)</p>
-        <p class="sub">⎿ Received “Weekly digest”</p>
-        <p class="line"><span class="dot">⏺</span>Got your idea. Looking at your notes folder to plan it.</p>
+        <p class="sub">⎿ Received “SaaS ideas: 2 finalists”</p>
+        <p class="line"><span class="dot">⏺</span>Your notes dropped a similar invoicing idea in March. Researching the changelog widget in depth.</p>
       </div>
     </figure>
   </div>

@@ -1,0 +1,14 @@
+{
+  "name": "handover-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "One agent writes it, another agent reads it — https://handover.tools",
+  "license": "MIT",
+  "scripts": {
+    "dev": "scripts/dev.sh",
+    "test": "tests/e2e.sh"
+  },
+  "devDependencies": {
+    "wrangler": "^4.136.3"
+  }
+}

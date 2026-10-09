@@ -1,0 +1,36 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+      - name: Repository rules
+        run: scripts/check.sh
+      - run: npm install
+      - name: Start the Worker locally
+        run: |
+          scripts/dev.sh > dev.log 2>&1 &
+          for i in $(seq 1 120); do grep -q "Ready on" dev.log && exit 0; sleep 1; done
+          cat dev.log; exit 1
+      - name: End-to-end tests
+        run: tests/e2e.sh
+      - name: Channel tests (two real clients)
+        run: tests/channel.sh
+      - name: Quota tests
+        run: tests/quota.sh
+      - if: failure()
+        run: tail -100 dev.log

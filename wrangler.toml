@@ -1,0 +1,25 @@
+name = "handover-tools"
+main = "src/entry.py"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["python_workers"]
+
+# Custom domain. Binding it needs a token with zone-level permissions (Workers Routes:Edit + DNS:Edit).
+# Local wrangler dev rewrites the request Host to this route's domain.
+[[routes]]
+pattern = "handover.tools"
+custom_domain = true
+
+# Production database (region WNAM). Local `wrangler dev` uses a separate SQLite under .wrangler/state; they don't affect each other.
+[[d1_databases]]
+binding = "DB"
+database_name = "handover-tools"
+database_id = "b99ea1cb-c212-4d4e-aeca-6795a6a56ff0"
+
+[observability]
+enabled = true
+
+[vars]
+FREE_CALLS_PER_DAY = "200"      # per caller per day (reads and writes combined)
+WRITE_CALLS_PER_DAY = "10"      # per-caller daily writes (much stricter: a write leaves someone else's content in our database)
+GLOBAL_DAILY_CALLS = "20000"    # whole-service daily total (protects the CF account)
+IP_RETENTION_DAYS = "30"        # days caller IPs are kept in the metering table, then blanked (meter.sweep)

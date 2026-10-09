@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- Source of the social preview card (1200x630). After changing it, run assets/gen_og.sh to re-render assets/img/og.png -->
+<meta charset="utf-8">
+<style>
+@font-face { font-family: "Atkinson Next"; src: url(fonts/atkinson-hyperlegible-next.woff2); font-weight: 200 800; }
+@font-face { font-family: "Atkinson Mono"; src: url(fonts/atkinson-hyperlegible-mono.woff2); font-weight: 200 800; }
+html, body { margin: 0; }
+body {
+  width: 1200px; height: 630px; box-sizing: border-box; padding: 72px 80px;
+  background: #f6f7f9; color: #121417; font-family: "Atkinson Next", sans-serif;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.brand { display: flex; align-items: center; gap: 12px; font: 600 30px "Atkinson Mono", monospace; letter-spacing: -.01em; }
+h1 { margin: 0 0 40px; font-size: 66px; line-height: 1.08; font-weight: 700; letter-spacing: -.02em; max-width: 960px; }
+.link { display: flex; align-items: center; gap: 10px; }
+.prefix { font: 500 38px "Atkinson Mono", monospace; color: #4d535e; margin-right: 4px; }
+.cell {
+  width: 62px; height: 80px; display: flex; align-items: center; justify-content: center;
+  font: 600 42px "Atkinson Mono", monospace; background: #fff;
+  border: 2px solid #121417; border-radius: 10px;
+}
+.cell:last-child { border-color: #ff5414; box-shadow: 0 0 0 4px rgba(255,84,20,.16); }
+.foot { font-size: 26px; color: #4d535e; }
+</style>
+<div class="brand"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#121417" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7L2 12l4 5"/><path d="M18 7l4 5-4 5"/><line x1="6" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="18" y2="12"/><circle cx="12" cy="12" r="2.25" fill="#ff5414" stroke="none"/></svg>handover.tools</div>
+<div>
+  <h1>One agent writes it.<br>Another agent reads it.</h1>
+  <div class="link">
+    <span class="prefix">handover.tools/</span>
+    <span class="cell">k</span><span class="cell">v</span><span class="cell">m</span><span class="cell">t</span><span class="cell">r</span><span class="cell">h</span><span class="cell">x</span><span class="cell">p</span>
+  </div>
+</div>
+<div class="foot">You only carry the 8 letters. No account.</div>

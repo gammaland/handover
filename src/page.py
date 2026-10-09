@@ -4,7 +4,7 @@ Order: one-line value + a two-device conversation example (the conclusions of a 
 When opened with a code (handover.tools/<code>), the server adds prefill to .home and the fetch box moves to the top.
 Keep it restrained, clean and quiet.
 """
-from style import page, REPO
+from style import page
 import changelog_src
 import icons
 from tools import handoff as ho
@@ -14,15 +14,15 @@ _CSS = """
   .hero { margin-bottom: 8px; }
   .eyebrow {
     margin: 0 0 14px; font: 600 13px/1.4 var(--mono); letter-spacing: .04em;
-    color: var(--ink-tertiary); text-transform: uppercase;
+    color: var(--ink-tertiary); text-transform: uppercase; max-width: none;
   }
-  .eyebrow a { color: inherit; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border-subtle); }
-  .eyebrow a:hover { color: var(--ink-primary); }
   /* The newest CHANGELOG.md entry, so updates are visible without hunting in the footer */
+  .eyebrow .news { margin-left: 2px; }
   .news {
-    align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
-    margin: 0 0 18px; padding: 4px 12px 4px 4px; border: 1px solid var(--border-subtle); border-radius: 999px;
-    background: var(--bg-surface); font-size: 13.5px; color: var(--ink-secondary); text-decoration: none;
+    display: inline-flex; align-items: center; gap: 8px; max-width: 100%; vertical-align: middle;
+    margin: 0 0 0 2px; padding: 3px 12px 3px 3px; border: 1px solid var(--border-subtle); border-radius: 999px;
+    background: var(--bg-surface); font: 400 13.5px/1.3 var(--sans); letter-spacing: 0; text-transform: none;
+    color: var(--ink-secondary); text-decoration: none;
   }
   .news:hover { color: var(--ink-primary); border-color: var(--signal-orange-border); }
   .news-tag {
@@ -31,6 +31,7 @@ _CSS = """
   }
   .news-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .news .icon { flex: none; width: 14px; height: 14px; }
+  @media (max-width: 640px) { .news-sep { display: none; } .eyebrow .news { display: flex; width: max-content; margin: 10px 0 0; } }
   .hero h1 { font-size: clamp(30px, 5.4vw, 44px); line-height: 1.08; max-width: 15em; margin-bottom: 14px; }
 
   /* The two-device conversation example: static, because being readable matters more than moving */
@@ -272,8 +273,7 @@ _LATEST = changelog_src.SRC.split("\n## ", 2)[1].split("\n", 1)[0].partition(" �
 _BODY = f"""
 <div class="home">
 <section class="hero">
-  <a class="news" href="/changelog"><span class="news-tag">New</span><span class="news-title">{_LATEST}</span>{icons.ICON_ARROW_RIGHT}</a>
-  <p class="eyebrow">No account · No install · Any agent · <a href="{REPO}">Open source</a></p>
+  <p class="eyebrow">No account · No install · Any agent<span class="news-sep"> · </span><a class="news" href="/changelog"><span class="news-tag">New</span><span class="news-title">{_LATEST}</span>{icons.ICON_ARROW_RIGHT}</a></p>
   <h1>Hand work from one AI agent to another.</h1>
   <p class="lede">Brainstorm wherever it's easy, for as many rounds as it takes. Then hand the conclusions to the
   agent that has your history. One sentence, 8 letters, read once.</p>

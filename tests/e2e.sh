@@ -36,6 +36,8 @@ chk "browser UA without Accept gets the page" "$(curl -s -A 'Mozilla/5.0' -H 'Ac
 chk "explicit JSON request gets JSON"        "$(curl -s -A 'Mozilla/5.0' -H 'Accept: application/json' $B/ | j "['service']")" "handover.tools"
 chk "homepage says what it is first"              "$(curl -s -H 'Accept: text/html' $B/ | grep -c 'Hand work from one AI agent to another')" "1"
 chk "homepage example hands over a brainstorm" "$(curl -s -H 'Accept: text/html' $B/ | grep -c 'earlier messages')" "1"
+chk "header links GitHub on every page" "$(for u in / /guide /writing; do curl -s -H 'Accept: text/html' $B$u | grep -c 'class="nav-gh" href="https://github.com/gammaland/handover"'; done | tr -d '\n')" "111"
+chk "homepage New pill is the latest changelog entry" "$(curl -s -H 'Accept: text/html' $B/ | grep -c "class=\"news-title\">$(grep -m1 '^## ' "$(dirname "$0")/../CHANGELOG.md" | sed 's/^## [0-9-]* · //')<")" "1"
 chk "homepage explains the difference"                "$(curl -s -H 'Accept: text/html' $B/ | grep -c 'A handoff, not a workspace')" "1"
 chk "client icons on both ends of the example"      "$(curl -s -o /dev/null -w '%{http_code}' $B/img/client-muse.png)$(curl -s -o /dev/null -w '%{http_code}' $B/img/client-claude.png)$(curl -s -H 'Accept: text/html' $B/ | grep -c 'class="client"><img')" "2002002"
 chk "opened with a code, fetch box comes first"         "$(curl -s -H 'Accept: text/html' $B/kvmtrhxp | grep -c 'class="home prefill"')$(curl -s -H 'Accept: text/html' $B/ | grep -c 'home prefill')" "10"

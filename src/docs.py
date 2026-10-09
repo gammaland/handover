@@ -147,7 +147,7 @@ Source (MIT): {repo}. Protocol specs: {repo}/tree/main/docs/spec. Changes: https
 
 HANDOFF_MD = """# handover
 
-One agent writes it, another agent reads it. You only carry an 8-letter link between them. For when a clipboard can't help: an agent on a server or in the cloud, a Windows PC and an iPhone, handing work to someone else, or two agents going back and forth. Two modes:
+One agent writes it, another agent reads it. You only carry an 8-letter link between them. Brainstorm on your phone for as many rounds as you like, then hand the conclusions to the agent on your laptop that has your history. Also for agents in the cloud, a Windows PC and an iPhone, or someone else's agent. Two modes:
 
 - **One-shot**: one piece of text, fetched once. Not encrypted.
 - **Channel**: two agents on two machines, many rounds, end-to-end encrypted.
@@ -156,9 +156,9 @@ Copy a prompt into your agent. Nothing to install, no account.
 
 ## One-shot
 
-1. "Hand this over with handover.tools." → the agent gives you a link like handover.tools/kvmtrhxp.
+1. "Hand this over with handover.tools." (for example at the end of a brainstorm in Muse on your phone) → the agent writes up what you settled on and gives you a link like handover.tools/kvmtrhxp.
    Works in any agent that can run commands (Claude Code, Codex, Cursor…). In a chat app that can't, add MCP first (below).
-2. On the other device, paste the link to its agent: handover.tools/kvmtrhxp
+2. On the other device, paste the link to its agent (for example Claude Code on your laptop, which has your history): handover.tools/kvmtrhxp
    If an agent only describes the page instead of fetching, say "get handover.tools/kvmtrhxp".
    Opening that link never uses the code up, so a chat app's link preview can't burn it.
    No agent at all: open the same link in a browser.
@@ -404,17 +404,21 @@ def _say(text: str) -> str:
 _HANDOFF_BODY = (
     '<h1>handover</h1>'
     '<p class="lede intro">One agent writes it, another agent reads it. You only carry an 8-letter link between them.</p>'
-    "<p class=\"sub\">For when a clipboard can't help: an agent on a server or in the cloud, a Windows PC and an iPhone, handing work to someone else, or two agents going back and forth. Copy a prompt below into your agent. Nothing to install, no account.</p>"
+    "<p class=\"sub\">Brainstorm on your phone for as many rounds as you like, then hand the conclusions to the agent "
+    "on your laptop that has your history. Also for agents in the cloud, a Windows PC and an iPhone, or someone else's agent. "
+    "Copy a prompt below. Nothing to install, no account.</p>"
 
     f'<h2><span class="heading-icon">{icons.ICON_ONESHOT} One-shot</span> {_TAG_PLAIN}</h2>'
     '<p class="sub">One piece of text, fetched once.</p>'
     + _script([
         ("Device A", _say("Hand this over with handover.tools."),
-         f"Your agent stores it and gives you a link like {_LINK}. Works in any agent "
+         f"Say it at the end of a brainstorm, for example in Muse on your phone. Your agent writes up what you settled on, "
+         f"stores it, and gives you a link like {_LINK}. Works in any agent "
          "that can run commands, such as Claude Code, Codex or Cursor. In a chat app that can't, "
          "<a href=\"#mcp\">add MCP</a> first."),
         ("Device B", "Paste the link into its agent",
-         f"Just {_LINK}, nothing else. The text arrives, and it can't be fetched again."
+         f"Just {_LINK}, nothing else, for example to Claude Code on your laptop, which knows your projects and notes. "
+         "The text arrives, and it can't be fetched again."
          '<span class="alt">No agent? Open the link in a browser. '
          'Agent only describes the page? Say “get” and the link.</span>'),
         ("Device A, same conversation", _say("Revoke the handoff."),

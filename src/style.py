@@ -207,6 +207,9 @@ CSS = """
     transition:all 0.15s ease;
   }
   .top nav a:hover { color:var(--ink-primary); background:var(--bg-wash); }
+  .top nav a.nav-gh { display:inline-flex; align-items:center; padding:7px 8px; }
+  .top nav a.nav-gh .icon { vertical-align:0; }
+  @media (max-width:640px) { .top nav { gap:0; margin-left:-8px; } .top nav a { padding:6px 8px; font-size:14px; } }
   .top nav a[aria-current] {
     color:var(--ink-primary); background:var(--bg-wash);
     font-weight:600; box-shadow:inset 0 0 0 1px var(--border-subtle);
@@ -352,7 +355,7 @@ CSS = """
 
 SITE = "handover.tools"   # the product site (D47)
 REPO = "https://github.com/gammaland/handover"
-_NAV = [("/guide", "Guide"), ("/security", "Security"), ("/llms.txt", "For agents")]
+_NAV = [("/guide", "Guide"), ("/security", "Security"), ("/writing", "Writing"), ("/llms.txt", "For agents")]
 
 
 def header(current: str = "", site: str = SITE) -> str:
@@ -364,8 +367,10 @@ def header(current: str = "", site: str = SITE) -> str:
               '<svg class="sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
               '<svg class="moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>'
               '</button>')
+    gh = (f'<a class="nav-gh" href="{REPO}" aria-label="Source on GitHub" title="Source on GitHub">'
+          + icons.ICON_GITHUB.replace('width="14" height="14"', 'width="18" height="18"') + '</a>') if nav else ""
     return (f'<header class="top"><a class="brand" href="/">{icons.BRAND_ICON}{site}</a>'
-            f'<nav>{links}{toggle}</nav></header>')
+            f'<nav>{links}{gh}{toggle}</nav></header>')
 
 
 def page(*, title: str, desc: str, body: str, current: str = "", md: str = "",

@@ -9,4 +9,5 @@ __pycache__/
 src/client_src.py
 src/fonts_src.py
 src/changelog_src.py
+src/writing_src.py
 package-lock.json

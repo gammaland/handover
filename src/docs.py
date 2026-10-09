@@ -8,6 +8,7 @@
 from tools import channel as ch
 from tools import handoff as ho
 import changelog_src
+import writing
 import client_src
 import guard
 import icons
@@ -834,3 +835,4 @@ PAGES = {
     "/changelog": (CHANGELOG_HTML, "text/html; charset=utf-8"),
     "/changelog.md": (CHANGELOG_MD, "text/markdown; charset=utf-8"),
 }
+PAGES.update(writing.PAGES)

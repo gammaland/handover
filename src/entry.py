@@ -12,7 +12,7 @@ from registry import all_tools, get_tool
 # Tools register themselves on import. Add one import line and REST / MCP / discover all pick it up.
 # domain_check was retired on 2026-09-22 (D15).
 from tools import handoff, channel
-import client_src, docs, fonts_src, icons
+import client_src, docs, fonts_src, icons, writing
 
 # MCP dual era (spec 2026-07-28)
 #   modern (2026-07-28+): no handshake. Every request carries its version in params._meta, mirrored in HTTP headers;
@@ -184,7 +184,8 @@ class Default(WorkerEntrypoint):
             return Response(data, headers={"Content-Type": ctype, "Cache-Control": "public, max-age=86400"})
         if path == "/sitemap.xml":
             urls = "".join(f"<url><loc>https://{SITE}{p}</loc></url>"
-                           for p in ("/", "/guide", "/security", "/terms", "/privacy", "/changelog"))
+                           for p in ("/", "/guide", "/security", "/terms", "/privacy", "/changelog", "/writing",
+                                     *(f"/writing/{w['slug']}" for w in writing.POSTS)))
             return Response('<?xml version="1.0" encoding="UTF-8"?>'
                             f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>',
                             headers={"Content-Type": "application/xml; charset=utf-8",

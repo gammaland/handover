@@ -345,6 +345,8 @@ CSS = """
   }
   footer p { margin:0 0 6px; max-width:none; color:var(--ink-tertiary); }
   footer a { color:var(--ink-secondary); }
+  footer a.gh { white-space:nowrap; }
+  footer a.gh .icon { vertical-align:-2px; margin-right:5px; }
 """ % {"next": _F.get("atkinson-hyperlegible-next.woff2", ""),
        "mono": _F.get("atkinson-hyperlegible-mono.woff2", "")}
 
@@ -425,7 +427,7 @@ document.addEventListener('DOMContentLoaded', function(){
 {header(current, site)}
 {body}
 <footer>
-{agents_line}  <p>No account, no key. <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/changelog">Changelog</a> · <a href="{REPO}">Source</a>. Report abuse: <a href="mailto:abuse@handover.tools">abuse@handover.tools</a></p>
+{agents_line}  <p>No account, no key. <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/changelog">Changelog</a> · <a href="/writing">Writing</a> · <a class="gh" href="{REPO}">{icons.ICON_GITHUB}Source on GitHub</a>. Report abuse: <a href="mailto:abuse@handover.tools">abuse@handover.tools</a></p>
 </footer>
 </main>
 {script}

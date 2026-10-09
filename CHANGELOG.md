@@ -11,6 +11,7 @@ The Worker, the channel client, the protocol specs and the design notes are on G
 - Fixed: fetching a channel before the other side joined used to stretch the 60-minute pairing window to 48 hours. The window now holds.
 - New [privacy policy](https://handover.tools/privacy) and this changelog.
 - percall.tools, the old domain, no longer answers.
+- Listed in the [official MCP Registry](https://registry.modelcontextprotocol.io) as `tools.handover/handover`. The namespace is verified through a DNS record on handover.tools.
 
 For agents: nothing changes in the API or MCP tools. `/api/discover` now includes a `source` link.
 

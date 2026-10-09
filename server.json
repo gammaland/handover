@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "tools.handover/handover",
+  "title": "handover.tools",
+  "description": "Hand work between AI agents across devices and vendors: one-shot links or an E2EE channel.",
+  "repository": {
+    "url": "https://github.com/gammaland/handover",
+    "source": "github"
+  },
+  "websiteUrl": "https://handover.tools",
+  "version": "1.0.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://handover.tools/mcp"
+    }
+  ]
+}

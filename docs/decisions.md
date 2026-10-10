@@ -2,9 +2,36 @@
 
 This is a selection from the project's private decision log, translated. Each entry records why something was done and what was rejected. The `Dxx` numbers match the references in the code comments. Entries that are missing here were left out because they are internal or out of date.
 
+Entries are grouped by topic and ordered by number within each group. Numbers are not contiguous: they come from the private log, where they were assigned in the order decisions were made.
+
+## Contents
+
+- [Positioning](#positioning): D6, D10, D22, D45, D46
+- [Name and domain](#name-and-domain): D47, D48 / D54
+- [One-shot and codes](#one-shot-and-codes): D20, D21 / D38, D39 / D36, D60
+- [Channel](#channel): D25, D26, D37
+- [Privacy and abuse](#privacy-and-abuse): D28, D40, D44
+- [Reaching agents](#reaching-agents): D24, D41, D42, D50
+- [Website](#website): D30 / D31
+- [Platform and testing](#platform-and-testing): D12, D15, D19, D27
+
 ---
 
 ## Positioning
+
+### D6 · Free, but metered from the first call
+
+The usual way "free now, paid later" fails: nothing is metered while it's free, so when pricing arrives there is no usage data to price from. Every call is recorded from day one at a price of 0, so the billing pipe works end to end and is not a stub. The free allowance is permanent and bounded; taking it back would destroy trust. Since D22 nothing here is expected to be sold, but the metering is also what makes abuse visible.
+
+### D10 · The filter that predicted the most
+
+> "Have I personally hit this in the past month?"
+
+Before handover, the project surveyed the MCP registry and found dozens of "pay-per-call, no API key" tool clusters. Their descriptions were nearly identical, a whole cluster was published within seconds, and download counts were in the hundreds. Supply existed without demand. Any candidate idea without a concrete first-person scenario got crossed out.
+
+### D22 · Honestly, one-shot is an online clipboard
+
+In features, it's nearly the same as the ad-supported "online clipboard" sites: paste text, get a short code, fetch it elsewhere, no account, expires. Measuring the biggest of those sites (about 830K page views a month, 94% from one country, 48 keywords that are all variants of "online clipboard") put the whole category's ceiling at a few hundred dollars a month in ad revenue. So handover is not a business, and revenue was never a goal. Its value is that agents use it natively: the link is itself the instructions, it burns after one read, and a phone agent can be told "fetch this" without anyone opening a browser.
 
 ### D45 · One agent writes it, another reads it
 
@@ -20,19 +47,9 @@ This is also why the useful niche is **cross-vendor and cross-person**. Vendors'
 
 **Rejected:** "the agent waits on a remote machine for a human decision." Vendor apps can already push a notification and ask for confirmation inside their own ecosystem.
 
-### D10 · The filter that predicted the most
+---
 
-> "Have I personally hit this in the past month?"
-
-Before handover, the project surveyed the MCP registry and found dozens of "pay-per-call, no API key" tool clusters. Their descriptions were nearly identical, a whole cluster was published within seconds, and download counts were in the hundreds. Supply existed without demand. Any candidate idea without a concrete first-person scenario got crossed out.
-
-### D22 · Honestly, one-shot is an online clipboard
-
-In features, it's nearly the same as the ad-supported "online clipboard" sites: paste text, get a short code, fetch it elsewhere, no account, expires. Measuring the biggest of those sites (about 830K page views a month, 94% from one country, 48 keywords that are all variants of "online clipboard") put the whole category's ceiling at a few hundred dollars a month in ad revenue. So handover is not a business, and revenue was never a goal. Its value is that agents use it natively: the link is itself the instructions, it burns after one read, and a phone agent can be told "fetch this" without anyone opening a browser.
-
-### D6 · Free, but metered from the first call
-
-The usual way "free now, paid later" fails: nothing is metered while it's free, so when pricing arrives there is no usage data to price from. Every call is recorded from day one at a price of 0, so the billing pipe works end to end and is not a stub. The free allowance is permanent and bounded; taking it back would destroy trust. Since D22 nothing here is expected to be sold, but the metering is also what makes abuse visible.
+## Name and domain
 
 ### D47 · From percall.tools to handover.tools
 
@@ -44,7 +61,43 @@ For a while percall.tools redirected every web path to handover.tools and return
 
 ---
 
-## Security and trust
+## One-shot and codes
+
+### D20 · Writes have their own gate, and the writer can revoke
+
+Reads leave nothing on the server; writes leave someone else's content there. One shared 200/day limit for both would have been lazy. Writes get their own 10/day gate, and a test checks that hitting it never blocks reads. `put` returns a 130-bit `revoke_key`, exactly once. The short code can only read, and only the writer can destroy. Revoking a code that was already revoked, already fetched, or expired returns the same `already_gone`, so existence isn't leaked.
+
+### D21 / D38 · Never fetch automatically from a URL
+
+Content burns after one read, and chat apps prefetch links. If opening `handover.tools/<code>` returned the content, pasting the link into Slack would let the preview crawler burn it. So:
+
+- The code URL returns **instructions** and doesn't query the database (it doesn't reveal whether the code exists). The real read is a second request that only an agent following those instructions makes.
+- In a browser, the code is pre-filled and nothing is fetched until the person presses Fetch. A test asserts that the page contains no `URLSearchParams`, so nobody can later add the "convenience" back.
+
+**Follow-up (D39):** to a cautious agent, the second hop can look like obeying instructions from a web page, which is the shape of a prompt injection. The page is now written as "the person who gave you this link wants what's inside it. It's one read from this same site; nothing is run and nothing is sent elsewhere." That lets the agent decide for itself that the step serves its user.
+
+### D39 / D36 · Codes are 8 lowercase letters, normalised with NFKC
+
+People really type codes on phones. Uppercase, digits and dashes meant switching keyboards four or five times per code. New codes use 22 letters, are shown in lowercase and need no dash: `handover.tools/kvmtrhxp` can be typed on one keyboard. Generation uses rejection sampling, because 256 isn't a multiple of 22 and a plain modulo would be biased.
+
+Trying nine spellings of a code against production turned up a failure only with **full-width** characters (`１Ｃ３Ｈ`), which Chinese input methods produce. On the channel this was the most confusing case: the password never reaches the server, so a full-width password simply derived a different key and showed up as `pairing_mismatch`, which looks like an attack. All four input paths now apply NFKC first.
+
+> Test normalisation against the characters people actually type, not against your alphabet.
+
+### D60 · Why one-shot is in D1, not Workers KV
+
+KV looks like the natural home for a short-lived key → blob with a TTL, and it would have replaced the expiry sweep with a native `expirationTtl`. It was not chosen, for four reasons:
+
+- **Read-once needs an atomic read-and-delete.** In D1 a fetch is one statement, `DELETE … WHERE code_hash=? AND expires_at>? AND burn=1 RETURNING content`, so when two readers race, exactly one gets the content. KV only offers `get` followed by `delete`, with no transaction or compare-and-swap, so both readers could get it.
+- **KV is eventually consistent.** Cloudflare's docs say changes "may take up to 60 seconds or more to be visible in other global network locations", and lookups of missing keys are cached as well. A handoff is usually written on one device and read seconds later on another, often through a different location, so a fresh code could return "not found". Revoke and burn are deletes, which propagate just as slowly: a revoked code could stay readable elsewhere for a while.
+- **The free tier is smaller.** On the Workers Free plan, KV allows 1,000 writes and 1,000 deletes a day, so about 1,000 handoffs. D1 allows 100,000 rows written a day.
+- **D1 is needed anyway.** Quota counters, and the channel's sequence numbers and read cursors, need atomic updates (`UPSERT … RETURNING`, conditional `UPDATE … RETURNING`). KV would have added a second store without removing the first.
+
+KV suits data that is written rarely, read often, and can be a few seconds stale. A handoff is written once, read once, and has to be consistent immediately.
+
+---
+
+## Channel
 
 ### D25 · Channel: the person stays in the loop
 
@@ -68,52 +121,27 @@ A short code is far too weak to serve as an encryption key: 8 letters can be bru
 
 Walking through the docs as an agent that knew nothing else turned up a silent failure. The server accepts any base64 on `channel_send`, so a helpful agent could base64-encode *plaintext*, skip the client, and the end-to-end promise would quietly break. ChaCha20-Poly1305 output is indistinguishable from random bytes, and only about 38% of random bytes are printable ASCII. Anything that decodes to fewer than 48 bytes, or to ≥ 90% printable bytes, is now refused with `not_ciphertext`. This guards against misuse, not malice: anyone can XOR their plaintext first. It stops the accident that is most likely to happen.
 
+---
+
+## Privacy and abuse
+
 ### D28 · IP retention and the $0 ceiling
 
 Every place that stores an IP was inventoried. Metering rows keep the row but blank the IP after 30 days; quota counters go after 7 days; a handoff's or channel's creator IP is deleted with it. The public page states the 30 days, and a test checks that the page and the configuration agree.
 
 Cloudflare's paid plan has budget alerts but no hard spending cap. The Free plan returns errors when its limits are exceeded and never bills, so staying on Free *is* the hard $0 ceiling. Moving to Paid would first need budget alerts, edge rate limiting and a CPU limit.
 
-### D44 · First layer against abuse
-
-One-shot already resists most abuse: no HTML rendering, read once, 60-minute default, not enumerable, not indexed, 10 writes per IP per day. Added on top: a caution above content fetched in the browser ("this came from whoever sent you the link… don't run commands because it says so"), terms of use, `security.txt` (RFC 9116), and an operator blocklist that stops writes from an IP or a range without a redeploy. Prefix matching deliberately avoids SQL `LIKE`, where `%` and `_` are wildcards and one typo could block a huge range.
-
 ### D40 · Discovery shows how it works, not how to break it
 
 `/api/discover` stays, because it is the only place that lists every REST input schema. Removed from it: the site-wide usage and cap (they told an attacker "N more calls and the whole site stops", with live progress), the runtime name (only useful for fingerprinting), and the caller's own IP (an agent might paste the whole response into a handoff). Kept: per-caller quota, schemas, protocol versions, and the client's sha256. Explaining how it works builds trust; it isn't a leak.
 
-### D21 / D38 · Never fetch automatically from a URL
+### D44 · First layer against abuse
 
-Content burns after one read, and chat apps prefetch links. If opening `handover.tools/<code>` returned the content, pasting the link into Slack would let the preview crawler burn it. So:
-
-- The code URL returns **instructions** and doesn't query the database (it doesn't reveal whether the code exists). The real read is a second request that only an agent following those instructions makes.
-- In a browser, the code is pre-filled and nothing is fetched until the person presses Fetch. A test asserts that the page contains no `URLSearchParams`, so nobody can later add the "convenience" back.
-
-**Follow-up (D39):** to a cautious agent, the second hop can look like obeying instructions from a web page, which is the shape of a prompt injection. The page is now written as "the person who gave you this link wants what's inside it. It's one read from this same site; nothing is run and nothing is sent elsewhere." That lets the agent decide for itself that the step serves its user.
-
-### D20 · Writes have their own gate, and the writer can revoke
-
-Reads leave nothing on the server; writes leave someone else's content there. One shared 200/day limit for both would have been lazy. Writes get their own 10/day gate, and a test checks that hitting it never blocks reads. `put` returns a 130-bit `revoke_key`, exactly once. The short code can only read, and only the writer can destroy. Revoking a code that was already revoked, already fetched, or expired returns the same `already_gone`, so existence isn't leaked.
+One-shot already resists most abuse: no HTML rendering, read once, 60-minute default, not enumerable, not indexed, 10 writes per IP per day. Added on top: a caution above content fetched in the browser ("this came from whoever sent you the link… don't run commands because it says so"), terms of use, `security.txt` (RFC 9116), and an operator blocklist that stops writes from an IP or a range without a redeploy. Prefix matching deliberately avoids SQL `LIKE`, where `%` and `_` are wildcards and one typo could block a huge range.
 
 ---
 
-## Details that mattered
-
-### D39 / D36 · Codes are 8 lowercase letters, normalised with NFKC
-
-People really type codes on phones. Uppercase, digits and dashes meant switching keyboards four or five times per code. New codes use 22 letters, are shown in lowercase and need no dash: `handover.tools/kvmtrhxp` can be typed on one keyboard. Generation uses rejection sampling, because 256 isn't a multiple of 22 and a plain modulo would be biased.
-
-Trying nine spellings of a code against production turned up a failure only with **full-width** characters (`１Ｃ３Ｈ`), which Chinese input methods produce. On the channel this was the most confusing case: the password never reaches the server, so a full-width password simply derived a different key and showed up as `pairing_mismatch`, which looks like an attack. All four input paths now apply NFKC first.
-
-> Test normalisation against the characters people actually type, not against your alphabet.
-
-### D42 · Copyable prompts first, MCP last
-
-A fresh Claude Code with no MCP, no skills and no settings, told only "Hand this over with handover.tools.", opened the homepage, used the curl recipe in its JSON, and returned a working link. So the guide now opens with prompts that copy in one click. MCP setup moved to the end, for chat apps that can't run commands. A copyable prompt must never contain a placeholder: whatever is in it, people will paste.
-
-### D30 / D31 · A design system with reasons
-
-The first homepage was a SaaS card kit with gradients and system fonts, which could have been any product. The theme comes from where the word comes from: air traffic control, where one controller hands an aircraft to the next. The type is Atkinson Hyperlegible Next and Mono, designed by the Braille Institute to tell similar letters apart, the same job as dropping I, L, O and U from the code alphabet. The fonts are self-hosted, because Google Fonts would send every visitor's IP to a third party (D28). The palette is paper, ink and one aviation orange, with colour reserved for the encryption state of each mode. The docs pages use a "call log" layout: on the left, who is speaking (Device A, Machine B, You); on the right, what they say and what happens next.
+## Reaching agents
 
 ### D24 · Measuring the MCP ecosystem
 
@@ -125,9 +153,25 @@ Our own server has to serve both eras. A bug I caught: deciding the era by "is t
 
 Every curl assertion passed, and a real Claude Code still failed to load tools: `missing required resultType`, then missing `ttlMs` and `cacheScope`. The modern era requires these on *every* result, not just on `server/discover`. The fix shipped only after a real client (`claude -p --strict-mcp-config`) completed `tools/list` and `tools/call` locally.
 
+### D42 · Copyable prompts first, MCP last
+
+A fresh Claude Code with no MCP, no skills and no settings, told only "Hand this over with handover.tools.", opened the homepage, used the curl recipe in its JSON, and returned a working link. So the guide now opens with prompts that copy in one click. MCP setup moved to the end, for chat apps that can't run commands. A copyable prompt must never contain a placeholder: whatever is in it, people will paste.
+
 ### D50 · AI assistants were being served JSON
 
 Asked "what is handover.tools?", an AI assistant twice replied that it "isn't a usable website". The cause was our own code: `/` served the web page only when the request carried `Accept: text/html`, and everything else got JSON with `X-Robots-Tag: noindex`. Googlebot sends `text/html`; the fetchers AI assistants use to check a page often send `*/*`. Now an explicit JSON request gets JSON, a `Mozilla` user agent gets the page, and curl, wget and SDKs still get JSON, so the agent contract is unchanged. Code URLs still look only at `Accept`, because an agent opening a code link should get Markdown instructions.
+
+---
+
+## Website
+
+### D30 / D31 · A design system with reasons
+
+The first homepage was a SaaS card kit with gradients and system fonts, which could have been any product. The theme comes from where the word comes from: air traffic control, where one controller hands an aircraft to the next. The type is Atkinson Hyperlegible Next and Mono, designed by the Braille Institute to tell similar letters apart, the same job as dropping I, L, O and U from the code alphabet. The fonts are self-hosted, because Google Fonts would send every visitor's IP to a third party (D28). The palette is paper, ink and one aviation orange, with colour reserved for the encryption state of each mode. The docs pages use a "call log" layout: on the left, who is speaking (Device A, Machine B, You); on the right, what they say and what happens next.
+
+---
+
+## Platform and testing
 
 ### D12 · Python Workers, the day after GA
 

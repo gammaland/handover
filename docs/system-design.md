@@ -48,7 +48,7 @@ flowchart LR
   W --> D
 ```
 
-There is **one Worker, one D1 database, and nothing else**: no Durable Objects, queues, KV or cron. Every piece of state is a row in D1, and every operation is one HTTP request. With no push, nothing needs to stay in memory between requests.
+There is **one Worker, one D1 database, and nothing else**: no Durable Objects, queues, KV or cron (for why not KV, see D60). Every piece of state is a row in D1, and every operation is one HTTP request. With no push, nothing needs to stay in memory between requests.
 
 | Module | Role |
 |---|---|

@@ -2,7 +2,7 @@
 
 Routes, MCP and the self-describing docs are all derived from the registry, so they cannot drift apart.
 """
-import json, time
+import asyncio, json, time
 from urllib.parse import urlparse, parse_qs
 from workers import WorkerEntrypoint, Response
 
@@ -12,7 +12,7 @@ from registry import all_tools, get_tool
 # Tools register themselves on import. Add one import line and REST / MCP / discover all pick it up.
 # domain_check was retired on 2026-09-22 (D15).
 from tools import handoff, channel
-import client_src, docs, fonts_src, icons, writing
+import client_src, docs, writing
 
 # MCP dual era (spec 2026-07-28)
 #   modern (2026-07-28+): no handshake. Every request carries its version in params._meta, mirrored in HTTP headers;
@@ -26,14 +26,7 @@ MCP_LATEST = MCP_MODERN
 PV_KEY = "io.modelcontextprotocol/protocolVersion"
 
 SITE = "handover.tools"                                  # product site (D47)
-# Site icons: path -> (file name in fonts_src.IMAGES, None = icons.FAVICON_SVG; Content-Type)
-ICON_FILES = {"/favicon.ico": ("favicon.ico", "image/x-icon"),
-              "/favicon.svg": (None, "image/svg+xml"),
-              "/icon-192.png": ("icon-192.png", "image/png"),
-              "/apple-touch-icon.png": ("apple-touch-icon.png", "image/png"),
-              # Official app icons of the two clients in the homepage example (96px App Store originals, D50). They only show which client it is; no partnership or endorsement implied
-              "/img/client-muse.png": ("client-muse.png", "image/png"),
-              "/img/client-claude.png": ("client-claude.png", "image/png")}
+# Fonts, images and icons never reach this Worker: they are static assets in public/ (scripts/build.sh, D61).
 
 # Error codes the spec reserves for the protocol layer
 E_HEADER_MISMATCH = -32020      # headers disagree with the body, or a required header is missing
@@ -98,20 +91,32 @@ def wants_home_page(request) -> bool:
 
 class Default(WorkerEntrypoint):
 
-    async def fetch(self, request):
+    def _housekeep(self):
+        """At most once every 10 minutes per isolate, run the four sweeps after the response (ctx.waitUntil).
+        They used to run before it, so the first request of every cold isolate, even a page view, waited
+        for about ten D1 round trips (D61). Any request still triggers them, as before."""
         global _swept_at
-        u = urlparse(str(request.url))
-        path, base = u.path, f"{u.scheme}://{u.netloc}"
+        if time.time() - _swept_at <= 600:
+            return
+        _swept_at = time.time()
 
-        await meter.ensure_schema(self.env)
-        await guard.ensure_schema(self.env)
-        if time.time() - _swept_at > 600:
-            _swept_at = time.time()
+        async def run():
+            try:
+                await meter.ensure_schema(self.env)
+                await guard.ensure_schema(self.env)
+            except Exception:
+                return
             for _sweep in (guard.sweep, meter.sweep, handoff.sweep_expired, channel.sweep_expired):
                 try:
                     await _sweep(self.env)
                 except Exception:
                     pass
+        self.ctx.waitUntil(asyncio.ensure_future(run()))
+
+    async def fetch(self, request):
+        u = urlparse(str(request.url))
+        path, base = u.path, f"{u.scheme}://{u.netloc}"
+        self._housekeep()
 
         if request.method == "OPTIONS":
             return Response("", status=204, headers=CORS)
@@ -171,17 +176,6 @@ class Default(WorkerEntrypoint):
             return Response(body, headers={"Content-Type": ctype,
                                            "Cache-Control": "public, max-age=300", **CORS})
 
-        if path == "/og.png":
-            # Social preview card (assets/og.html -> assets/gen_og.sh)
-            import base64
-            return Response(base64.b64decode(fonts_src.IMAGES["og.png"]), headers={
-                "Content-Type": "image/png", "Cache-Control": "public, max-age=86400"})
-        if path in ICON_FILES:
-            # Site icons (assets/gen_icons.sh). Google search results only accept crawlable URLs, not data: URIs
-            import base64
-            name, ctype = ICON_FILES[path]
-            data = icons.FAVICON_SVG.encode() if name is None else base64.b64decode(fonts_src.IMAGES[name])
-            return Response(data, headers={"Content-Type": ctype, "Cache-Control": "public, max-age=86400"})
         if path == "/sitemap.xml":
             urls = "".join(f"<url><loc>https://{SITE}{p}</loc></url>"
                            for p in ("/", "/guide", "/security", "/terms", "/privacy", "/changelog", "/writing",
@@ -200,16 +194,6 @@ class Default(WorkerEntrypoint):
                             headers={"Content-Type": "text/plain; charset=utf-8",
                                      "Cache-Control": "public, max-age=3600"})
 
-        if path.startswith("/fonts/"):
-            # Self-hosted fonts (D30). File names carry a content hash as ?v=, so they can be cached for a long time
-            hit = fonts_src.FONTS.get(path[len("/fonts/"):])
-            if not hit:
-                return jres({"error": "not_found"}, 404)
-            import base64
-            return Response(base64.b64decode(hit[0]), headers={
-                "Content-Type": "font/woff2", "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "public, max-age=31536000, immutable"})
-
         if path == client_src.PATH:
             # The local encryption client for channel. The server only moves ciphertext; all crypto happens in this script (D26).
             # Downloading the client from us means trusting us once more. So we also publish its sha256
@@ -217,24 +201,6 @@ class Default(WorkerEntrypoint):
             return Response(client_src.SRC, headers={
                 "Content-Type": "text/x-python; charset=utf-8",
                 "X-Content-SHA256": client_src.SHA256, **CORS})
-
-        if path == "/api/health":
-            return jres({"ok": True, "ts": time.time()})
-
-        if path == "/api/usage":
-            return jres(await guard.usage_snapshot(self.env, meter.caller_of(request)))
-
-        if path == "/api/discover":
-            return await self._discover(request, base, u)
-
-        if path == "/mcp":
-            if request.method != "POST":
-                return jres({"error": "method_not_allowed", "hint": "The MCP endpoint accepts POST only."}, 405)
-            return await self._mcp(request)
-
-        for t in all_tools():
-            if path == t.path:
-                return await self._rest(request, t, u)
 
         # Short URL handover.tools/kvmtrhxp (D38, D39): the code is itself a URL, and the prompt includes the domain,
         # so an agent with nothing configured knows where to fetch. **Opening it does not use up the code**: it only returns instructions, and the real read is a second request;
@@ -252,6 +218,29 @@ class Default(WorkerEntrypoint):
             return Response(docs.code_landing(pretty, base), headers={
                 "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "no-store",
                 "X-Robots-Tag": "noindex", **CORS})
+
+        if path == "/api/health":
+            return jres({"ok": True, "ts": time.time()})
+
+        # Everything above is served without D1, so pages never wait for it on a cold start (D61).
+        # Everything below may touch it, so make sure the tables exist first.
+        await meter.ensure_schema(self.env)
+        await guard.ensure_schema(self.env)
+
+        if path == "/api/usage":
+            return jres(await guard.usage_snapshot(self.env, meter.caller_of(request)))
+
+        if path == "/api/discover":
+            return await self._discover(request, base, u)
+
+        if path == "/mcp":
+            if request.method != "POST":
+                return jres({"error": "method_not_allowed", "hint": "The MCP endpoint accepts POST only."}, 405)
+            return await self._mcp(request)
+
+        for t in all_tools():
+            if path == t.path:
+                return await self._rest(request, t, u)
 
         return jres({"error": "not_found", "hint": "See / or /api/discover"}, 404)
 

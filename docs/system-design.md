@@ -48,7 +48,7 @@ flowchart LR
   W --> D
 ```
 
-There is **one Worker, one D1 database, and nothing else**: no Durable Objects, queues, KV or cron (for why not KV, see D60). Every piece of state is a row in D1, and every operation is one HTTP request. With no push, nothing needs to stay in memory between requests.
+There is **one Worker, one D1 database, and nothing else**: no Durable Objects, queues, KV or cron (for why not KV, see D60). The Worker's fonts, images and icons are deployed with it as static assets, which Cloudflare serves without running the Worker (D61). Every piece of state is a row in D1, and every operation is one HTTP request. With no push, nothing needs to stay in memory between requests.
 
 | Module | Role |
 |---|---|
@@ -59,7 +59,7 @@ There is **one Worker, one D1 database, and nothing else**: no Durable Objects, 
 | `src/guard.py` | Quotas and the operator blocklist |
 | `src/meter.py` | Per-call metering |
 | `src/page.py`, `src/docs.py`, `src/style.py`, `src/icons.py` | The website: homepage, guide, security, terms, privacy and changelog pages, each also served as Markdown for LLMs |
-| `scripts/build.sh` | Embeds the client, the fonts and images, and `CHANGELOG.md` into generated Python modules, because Python Workers only bundle `.py` files |
+| `scripts/build.sh` | Embeds the client, `CHANGELOG.md` and the articles into generated Python modules, because Python Workers only bundle `.py` files. Assembles `public/`: fonts, images and icons, served as static assets (D61) |
 | `client/channel.py` | The local client: SPAKE2 pairing and ChaCha20-Poly1305. It is embedded in the Worker at build time and served at `/client/channel.py` |
 
 ### The registry: one definition, three surfaces
@@ -78,13 +78,15 @@ From that single definition the Worker serves a REST endpoint (`GET` with query 
 
 ```mermaid
 flowchart TD
-  R[Request] --> S{CF-Visitor says http<br/>and GET/HEAD?}
+  R[Request] --> A{Matches a file<br/>in public/?}
+  A -- yes --> SA[Static asset: fonts, images, icons<br/>served without running the Worker]
+  A -- no --> S{CF-Visitor says http<br/>and GET/HEAD?}
   S -- yes --> X[301 to https]
   S -- no --> P{Path}
   P -- "/" --> N{Wants a page?}
   N -- yes --> HP[Homepage HTML]
   N -- no --> J[JSON signpost]
-  P -- docs, icons, fonts,<br/>sitemap, robots --> ST[Static responses<br/>generated at build time]
+  P -- docs, sitemap, robots --> ST[Static responses<br/>generated at build time]
   P -- /client/channel.py --> CL[Client source<br/>+ X-Content-SHA256]
   P -- "/api/&lt;tool&gt;" or /mcp --> G[guard: admit or admit_keyed]
   G -- refused --> E[429 / 503<br/>metered as rate_limited]
@@ -97,6 +99,7 @@ flowchart TD
 Points worth noting:
 
 - **Content negotiation on `/`.** An explicit `application/json` gets the JSON signpost. `text/html` gets the page. Otherwise a `Mozilla` user agent gets the page and anything else (curl, wget, SDKs) gets JSON (D50). Responses carry `Vary: Accept, User-Agent`.
+- **Pages never wait for the database.** Everything up to and including code links is served without touching D1, so a visitor who meets a cold isolate waits only for Python to start (D61).
 - **Code links never read the database.** `/<code>` returns instructions or a prefilled page. The actual read is a second request (D21, D38).
 - **Existing paths are matched before code links.** Only a single path segment that normalizes to exactly 8 alphabet characters is treated as a code.
 - **CORS is fully open.** Nothing is protected by origin: there are no cookies or sessions, and the code is the only credential (D21).
@@ -104,9 +107,9 @@ Points worth noting:
 
 ### Housekeeping without cron
 
-Each Worker isolate runs four sweeps at most once every 10 minutes, at the start of a request: expired handoffs, expired channels, old counter buckets, and IP erasure in the metering table. Sweep errors are swallowed so they never fail the request. Reads also filter on `expires_at`, so an expired row that hasn't been swept yet is still never returned.
+Each Worker isolate runs four sweeps at most once every 10 minutes, triggered by any request and run after the response through `ctx.waitUntil`: expired handoffs, expired channels, old counter buckets, and IP erasure in the metering table. Sweep errors are swallowed so they never fail the request (D61). Reads also filter on `expires_at`, so an expired row that hasn't been swept yet is still never returned.
 
-Schemas are created lazily with `CREATE TABLE IF NOT EXISTS` on the first request an isolate handles. The one migration so far (adding `handoffs.revoke_hash`) is an `ALTER TABLE` whose failure is ignored once the column exists.
+Schemas are created lazily with `CREATE TABLE IF NOT EXISTS`, before the first sweep and before the first request an isolate handles that may touch D1. The one migration so far (adding `handoffs.revoke_hash`) is an `ALTER TABLE` whose failure is ignored once the column exists.
 
 ## 4. Data model
 

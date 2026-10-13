@@ -2,6 +2,15 @@
 
 Notable changes to handover.tools, newest first. The same file is served at https://handover.tools/changelog.
 
+## 2026-10-12 · Pages load faster
+Tags: Web
+Pages no longer wait for the server to start up twice.
+
+- Fonts, images and icons are now served directly by Cloudflare's edge, without starting the server.
+- Pages and code links no longer wait for database housekeeping, which now runs after the response is sent.
+
+For agents: nothing changes in the API or MCP tools.
+
 ## 2026-10-08 · The source is public
 Tags: Repo · Docs · Channel
 The Worker, the channel client, the protocol specs and the design notes are on GitHub under the MIT license.

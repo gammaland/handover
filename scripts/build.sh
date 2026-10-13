@@ -1,10 +1,11 @@
 #!/bin/bash
-# Generate the modules the Worker needs (Python Workers only bundle .py files). scripts/dev.sh and
-# scripts/deploy.sh run this first. The outputs are in .gitignore; never edit them.
+# Generate the modules the Worker needs (Python Workers only bundle .py files) and the static assets
+# directory. scripts/dev.sh and scripts/deploy.sh run this first. The outputs are in .gitignore; never edit them.
 #   src/client_src.py     client/channel.py, with its sha256
-#   src/fonts_src.py      assets/fonts/*.woff2 and assets/img/*
+#   src/fonts_src.py      the content hash of each font in assets/fonts/
 #   src/changelog_src.py  CHANGELOG.md
 #   src/writing_src.py    writing/*.md
+#   public/               fonts, images, icons and assets/_headers; Cloudflare serves these without running the Worker (D61)
 set -e
 cd "$(dirname "$0")/.."
 client/gen.sh
@@ -22,3 +23,11 @@ open("src/writing_src.py", "w", encoding="utf-8").write(
     f"POSTS = {posts!r}\n")
 print(f"writing_src.py    {len(posts)} post(s)")
 PY
+rm -rf public
+mkdir -p public/fonts public/img
+cp assets/fonts/*.woff2 public/fonts/
+cp assets/img/client-*.png public/img/
+cp assets/img/og.png assets/img/favicon.ico assets/img/icon-192.png assets/img/apple-touch-icon.png public/
+cp assets/_headers public/
+python3 -c 'import sys; sys.path.insert(0, "src"); import icons; open("public/favicon.svg", "w").write(icons.FAVICON_SVG)'
+echo "public/           $(find public -type f | wc -l | tr -d ' ') files"

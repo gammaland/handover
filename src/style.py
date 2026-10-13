@@ -10,7 +10,7 @@ Design tokens:
 import fonts_src
 import icons
 
-_F = {k: v[1] for k, v in fonts_src.FONTS.items()}   # file name -> content hash (cache busting)
+_F = fonts_src.FONTS   # file name -> content hash (cache busting)
 
 CSS = """
   @font-face { font-family:"Atkinson Next"; font-weight:200 800; font-display:swap;

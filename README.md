@@ -88,7 +88,7 @@ Requires Node ≥ 22 and Python 3.12.
 
 ```bash
 npm install
-scripts/dev.sh      # generates src/client_src.py + src/fonts_src.py, then runs wrangler dev on :8787
+scripts/dev.sh      # generates src/*_src.py and public/, then runs wrangler dev on :8787
 tests/e2e.sh        # end-to-end tests against the local server
 tests/channel.sh    # two isolated clients: pairing, tampering, replay
 tests/quota.sh      # quota gates (local only: edits counters directly)

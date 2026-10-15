@@ -355,8 +355,8 @@ _BODY = f"""
         </div>
         <span class="tag plain">not encrypted</span>
       </div>
-      <p>One piece of text, fetched once, then gone. Don’t put passwords, keys or your
-      employer’s confidential work in it.</p>
+      <p>One piece of text, fetched once, then gone. Don’t put passwords, keys or
+      confidential work material in it.</p>
     </a>
     <a href="/guide#channel" class="mode-card">
       <div class="mode-card-head">

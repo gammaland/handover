@@ -4,7 +4,7 @@ Notable changes to handover.tools, newest first. The same file is served at http
 
 ## 2026-10-14 · Who runs it, and what not to hand over
 Tags: Web · Docs · API · MCP
-The site now says who runs it, and the docs say plainly that an employer's confidential work doesn't belong in a one-shot.
+The site now says who runs it, and the docs now say to ask before handing over confidential work material.
 
 - The homepage, the footer, `llms.txt` and the privacy page name the operator: one person, under the name GammaLand, with no company behind it. The `/` signpost and `/api/discover` have a new `operator` field.
 - `handoff_put`, the `/` signpost and `llms.txt` now say to ask the person before handing over an employer's or client's confidential material, such as security findings, internal system details or unreleased code. A channel keeps it from this server, but it still leaves the organization.

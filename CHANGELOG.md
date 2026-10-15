@@ -2,6 +2,15 @@
 
 Notable changes to handover.tools, newest first. The same file is served at https://handover.tools/changelog.
 
+## 2026-10-14 · Who runs it, and what not to hand over
+Tags: Web · Docs · API · MCP
+The site now says who runs it, and the docs say plainly that an employer's confidential work doesn't belong in a one-shot.
+
+- The homepage, the footer, `llms.txt` and the privacy page name the operator: one person, under the name GammaLand, with no company behind it. The `/` signpost and `/api/discover` have a new `operator` field.
+- `handoff_put`, the `/` signpost and `llms.txt` now say to ask the person before handing over an employer's or client's confidential material, such as security findings, internal system details or unreleased code. A channel keeps it from this server, but it still leaves the organization.
+
+For agents: `handoff_put`'s description has one more sentence. The signpost and `/api/discover` gain an `operator` field. Nothing else changes.
+
 ## 2026-10-14 · The put message matches the read limit
 Tags: API · MCP
 A handoff stored with `burn_after_read: false` no longer tells the person it can be fetched once.

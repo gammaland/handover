@@ -144,5 +144,7 @@ A caller is a client IP. Days are UTC. At 200 guesses a day against 5.5 × 10¹�
 ## 7. Security properties
 
 - **Not encrypted.** Anyone with the code, and the operator, can read the content until it is fetched or expires. Tool descriptions, `/api/discover` and the docs all say so.
+- **Not for someone else's confidential material.** Credentials and private data stay out, and so does material that belongs to an employer or a client and is not public: security findings, internal system details, unreleased code. An agent holding such content asks the person before storing it. A channel keeps the content from the operator, but the content still leaves the organization, so whether that is allowed is the person's call, not the agent's. The `handoff_put` description, the `/` signpost and `llms.txt` say so.
+- **The operator is named.** The homepage, `llms.txt`, the privacy page, the `/` signpost and `/api/discover` say who runs the service and link the source, from one constant (`style.OPERATOR`). An agent deciding whether to trust an unfamiliar service should not have to infer that from a footer icon.
 - **Anyone who holds the link can read it, once.** If the intended recipient fetches and finds `not_found_or_expired`, someone else may have used it first.
 - **Content is data, not instructions.** The fetching agent should treat it as text from another person.

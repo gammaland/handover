@@ -8,6 +8,7 @@ from workers import WorkerEntrypoint, Response
 
 import meter, guard
 from page import PAGE
+from style import REPO, OPERATOR
 from registry import all_tools, get_tool
 # Tools register themselves on import. Add one import line and REST / MCP / discover all pick it up.
 # domain_check was retired on 2026-09-22 (D15).
@@ -152,10 +153,13 @@ class Default(WorkerEntrypoint):
                                  "-d '{\"content\":\"...\",\"label\":\"...\"}' (write long content to a file and "
                                  "use --data-binary @file). Tell the person the returned say_on_the_other_device; "
                                  "keep revoke_key in this conversation and do not show it. NOT encrypted: "
-                                 "no credentials or private data. With MCP, use handoff_put instead."),
+                                 "no credentials or private data, and ask the person before handing over an "
+                                 "employer's or client's confidential material. With MCP, use handoff_put instead."),
                 "channel_now": ("Asked to open or join a handover.tools channel? It needs the local client "
                                 f"(it does the encryption): follow the Channel part of {base}/llms.txt. "
                                 "Ask the person before downloading and running it if you normally would."),
+                "operator": OPERATOR,
+                "source": REPO,
                 "tools": [t.name for t in all_tools()],
                 "discover": f"{base}/api/discover",
                 "mcp": f"{base}/mcp",
@@ -262,7 +266,8 @@ class Default(WorkerEntrypoint):
                 "not claimed.",
             ],
             "how_to_use": f"{base}/guide.md",
-            "source": "https://github.com/gammaland/handover",
+            "operator": OPERATOR,
+            "source": REPO,
             "changelog": f"{base}/changelog.md",
             "privacy": f"{base}/privacy.md",
             "security": f"{base}/security.md",

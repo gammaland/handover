@@ -355,6 +355,8 @@ CSS = """
 
 SITE = "handover.tools"   # the product site (D47)
 REPO = "https://github.com/gammaland/handover"
+# Who runs it, said plainly wherever an agent decides whether to trust the service (spec/handoff §7)
+OPERATOR = "Run by one person under the name GammaLand, with no company behind it."
 _NAV = [("/guide", "Guide"), ("/security", "Security"), ("/writing", "Writing"), ("/llms.txt", "For agents")]
 
 
@@ -432,7 +434,7 @@ document.addEventListener('DOMContentLoaded', function(){
 {header(current, site)}
 {body}
 <footer>
-{agents_line}  <p>No account, no key. <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/changelog">Changelog</a> · <a href="/writing">Writing</a> · <a class="gh" href="{REPO}">{icons.ICON_GITHUB}Source on GitHub</a>. Report abuse: <a href="mailto:abuse@handover.tools">abuse@handover.tools</a></p>
+{agents_line}  <p>{OPERATOR} No account, no key. <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/changelog">Changelog</a> · <a href="/writing">Writing</a> · <a class="gh" href="{REPO}">{icons.ICON_GITHUB}Source on GitHub</a>. Report abuse: <a href="mailto:abuse@handover.tools">abuse@handover.tools</a></p>
 </footer>
 </main>
 {script}

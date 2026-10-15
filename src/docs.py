@@ -12,7 +12,7 @@ import writing
 import client_src
 import guard
 import icons
-from style import page, REPO
+from style import page, REPO, OPERATOR
 
 _H = {
     "reads": 200, "writes": 10,          # per IP per day, matching guard's default limits
@@ -32,6 +32,7 @@ _H = {
     "ip_days": 30,     # matches IP_RETENTION_DAYS in wrangler.toml; tests/e2e.sh checks that they are equal
     "counter_days": guard.COUNTER_DAYS,
     "repo": REPO,
+    "operator": OPERATOR,
     "client_source": f"{REPO}/blob/main/client/channel.py",
 }
 
@@ -99,7 +100,7 @@ LLMS_TXT = """# handover.tools
 > **one-shot** (one piece of text, fetched once, NOT encrypted) and **channel** (two agents
 > paired for many rounds, end-to-end encrypted, a person approves every message).
 
-Source (MIT): {repo}. Protocol specs: {repo}/tree/main/docs/spec. Changes: https://handover.tools/changelog.md
+{operator} Source (MIT): {repo}. Protocol specs: {repo}/tree/main/docs/spec. Changes: https://handover.tools/changelog.md
 
 ## Quick start: what the person says, what you do
 
@@ -129,6 +130,9 @@ Source (MIT): {repo}. Protocol specs: {repo}/tree/main/docs/spec. Changes: https
 ## Rules
 
 - One-shot is NOT encrypted. Never put credentials, tokens, or private data into handoff_put.
+- Ask the person before handing over confidential work material (an employer's or client's security
+  findings, internal system details, unreleased code). A channel keeps it from this server, but it
+  still leaves their organization; whether that is allowed is their call, not yours.
 - Channel must go through the local client; it does the cryptography. Never send the last {pw}
   letters of a channel code to any server, including this one.
 - Human in the loop: send only after the person approves; fetch only when asked. Never poll.
@@ -662,6 +666,9 @@ TERMS_HTML = page(
 # ---------------------------------------------------------------- privacy policy
 # One text; both HTML and Markdown are generated from it. Every number comes from a code constant (D27).
 _PRIVACY = [
+    ("Who we are", [
+        "{operator} The code is <a href=\"{repo}\">public</a> under the MIT license.",
+    ]),
     ("What we keep", [
         "<b>One-shot content</b>: the text, its optional label, and when it was stored. It is not encrypted, so "
         "we can read it while it is stored. It is deleted when it is fetched (the default), when the sender "
@@ -693,7 +700,8 @@ _PRIVACY = [
         "stops being readable. For a channel, a backup holds only ciphertext.",
     ]),
     ("Your choices", [
-        "Don't put secrets in a one-shot. Use a channel for anything sensitive.",
+        "Don't put secrets, or your employer's or a client's confidential material, in a one-shot. Use a "
+        "channel for anything sensitive, if your organization allows sending it outside.",
         "Delete early: revoke a one-shot (only the conversation that sent it can) or close a channel (either "
         "side can).",
         "Questions and requests: <a href=\"mailto:privacy@handover.tools\">privacy@handover.tools</a>. There are "
@@ -701,7 +709,7 @@ _PRIVACY = [
         "The code that does all of this is <a href=\"{repo}\">public</a>.",
     ]),
 ]
-_PRIVACY_DATE = "2026-10-08"
+_PRIVACY_DATE = "2026-10-14"
 _PRIVACY_LEDE = ("handover.tools has no accounts, no ads and no cookies. This page lists everything it keeps, "
                  "for how long, and who else is involved.")
 

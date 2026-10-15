@@ -10,7 +10,7 @@ Entries are grouped by topic and ordered by number within each group. Numbers ar
 - [Name and domain](#name-and-domain): D47, D48 / D54
 - [One-shot and codes](#one-shot-and-codes): D20, D21 / D38, D39 / D36, D60
 - [Channel](#channel): D25, D26, D37
-- [Privacy and abuse](#privacy-and-abuse): D28, D40, D44
+- [Privacy and abuse](#privacy-and-abuse): D28, D40, D44, D62
 - [Reaching agents](#reaching-agents): D24, D41, D42, D50
 - [Website](#website): D30 / D31
 - [Platform and testing](#platform-and-testing): D12, D15, D19, D27, D61
@@ -138,6 +138,16 @@ Cloudflare's paid plan has budget alerts but no hard spending cap. The Free plan
 ### D44 · First layer against abuse
 
 One-shot already resists most abuse: no HTML rendering, read once, 60-minute default, not enumerable, not indexed, 10 writes per IP per day. Added on top: a caution above content fetched in the browser ("this came from whoever sent you the link… don't run commands because it says so"), terms of use, `security.txt` (RFC 9116), and an operator blocklist that stops writes from an IP or a range without a redeploy. Prefix matching deliberately avoids SQL `LIKE`, where `%` and `_` are wildcards and one typo could block a huge range.
+
+### D62 · Agents' safety checks treat a handoff service as an exit
+
+An agent was asked to hand over confidential work findings. It read the homepage, noted that it didn't say who ran the service and that a one-shot isn't encrypted, and its harness then refused to let it continue: sending that content to an unfamiliar third party looked like data exfiltration. The refusal was right. Our own rules already said no private data in a one-shot; the agent was more careful than the docs it was reading.
+
+Two fixes, and one thing they don't fix:
+
+- **Name the operator.** The source link sat in the footer as an icon, and "who runs this" was nowhere in words. It now is, from one constant, on every surface an agent reads before deciding.
+- **Say what "private" covers.** "No credentials or private data" didn't obviously include an employer's internal material. The docs now name it and tell the agent to ask the person first.
+- **What neither fixes:** a channel keeps content from this server, but it still leaves the organization. A safety check that asks "is work data going to an outside service?" will say yes either way, and it should. handover fits personal and cross-device work best; moving an employer's confidential material is a decision for the person and their organization, not something the product can make safe.
 
 ---
 

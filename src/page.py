@@ -4,7 +4,7 @@ Order: one-line value + a two-device conversation example (the conclusions of a 
 When opened with a code (handover.tools/<code>), the server adds prefill to .home and the fetch box moves to the top.
 Keep it restrained, clean and quiet.
 """
-from style import page
+from style import page, REPO, OPERATOR
 import changelog_src
 import icons
 from tools import handoff as ho
@@ -355,8 +355,8 @@ _BODY = f"""
         </div>
         <span class="tag plain">not encrypted</span>
       </div>
-      <p>One piece of text, fetched once, then gone. Don’t put passwords or keys in it;
-      use a channel for those.</p>
+      <p>One piece of text, fetched once, then gone. Don’t put passwords, keys or your
+      employer’s confidential work in it.</p>
     </a>
     <a href="/guide#channel" class="mode-card">
       <div class="mode-card-head">
@@ -381,6 +381,7 @@ _BODY = f"""
     <dt>Start here</dt><dd><a href="/llms.txt">handover.tools/llms.txt</a></dd>
     <dt>MCP</dt><dd><code>https://handover.tools/mcp</code></dd>
     <dt>Reference</dt><dd><a href="/api/discover">/api/discover</a></dd>
+    <dt>Operator</dt><dd>{OPERATOR} <a href="{REPO}">Source (MIT)</a></dd>
   </dl>
 </section>
 </div>

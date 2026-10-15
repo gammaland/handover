@@ -211,8 +211,9 @@ async def handoff_put(args, env):
         "say_on_the_other_device": f"handover.tools/{_pretty(code)}",
         "tell_the_person": (f"Tell the person to give this link to an agent on the other device: "
                             f"handover.tools/{_pretty(code)} (nothing else needed; any agent that can open "
-                            f"a web page can follow it, and a browser works too). It can be fetched once, until "
-                            f"{_iso(expires)}."),
+                            f"a web page can follow it, and a browser works too). "
+                            f"{'It can be fetched once' if burn else 'It can be fetched any number of times'}, "
+                            f"until {_iso(expires)}."),
         "keep_revoke_key": ("Store revoke_key for this session. It is shown once and is the only "
                             "way to destroy this content before it expires."),
     }

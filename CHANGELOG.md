@@ -2,6 +2,14 @@
 
 Notable changes to handover.tools, newest first. The same file is served at https://handover.tools/changelog.
 
+## 2026-10-14 · The put message matches the read limit
+Tags: API · MCP
+A handoff stored with `burn_after_read: false` no longer tells the person it can be fetched once.
+
+- Fixed: `tell_the_person` in the `handoff_put` response always said "It can be fetched once", even for multi-read handoffs. It now says "any number of times" when `burn_after_read` is false.
+
+For agents: only the text of `tell_the_person` changes. The other fields are the same.
+
 ## 2026-10-12 · Pages load faster
 Tags: Web
 Pages no longer wait for the server to start up twice.

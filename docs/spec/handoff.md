@@ -66,7 +66,7 @@ Validation happens **before** the write quota is charged, so a malformed request
 | `code` | Lowercase code, or `null` with `reason` |
 | `revoke_key` | Returned **once**. The writer keeps it; it is the only way to delete early |
 | `say_on_the_other_device` | `handover.tools/<code>` |
-| `tell_the_person`, `keep_revoke_key` | Instructions for the calling agent |
+| `tell_the_person`, `keep_revoke_key` | Instructions for the calling agent. `tell_the_person` states the read limit, which MUST match `burn_after_read` (once, or any number of times until expiry) |
 | `label`, `bytes`, `burn_after_read`, `expires_at`, `expires_in_minutes` | Echo of what was stored |
 | `writes_today`, `writes_per_day` | Write quota state |
 

@@ -193,6 +193,7 @@ chk "old codes with digits still parse"     "$(curl -s $B/K7M2-4QX9 | head -1)" 
 chk "put returns an 8-letter lowercase code" "$(printf '%s' "$C" | grep -cE '^[a-z]{8}$')" "1"
 chk "put returns revoke_key"   "$(printf '%s' "$R" | j "['revoke_key']" | wc -c | tr -d ' ')" "27"
 chk "read-once by default"          "$(printf '%s' "$R" | j "['burn_after_read']")" "True"
+chk "read-once is what the person is told"  "$(printf '%s' "$R" | j "['tell_the_person']" | grep -c 'fetched once')" "1"
 chk "default TTL 60 minutes"      "$(printf '%s' "$R" | j "['expires_in_minutes']")" "60"
 chk "reports write allowance"          "$(printf '%s' "$R" | j "['writes_per_day']")" "10"
 chk "fetches the original text"             "$(GET "$C" | j "['content']")" "round trip payload"
@@ -200,6 +201,7 @@ chk "gone after the read"          "$(GET "$C" | j "['reason']")" "not_found_or_
 
 R2=$(PUT '{"content":"multi read","burn_after_read":false,"ttl_minutes":5}')   # write 2
 C3=$(printf '%s' "$R2" | j "['code']")
+chk "multi-read is what the person is told"  "$(printf '%s' "$R2" | j "['tell_the_person']" | grep -c 'any number of times')" "1"
 chk "non-read-once can be read again"        "$(GET "$C3" >/dev/null; GET "$C3" | j "['content']")" "multi read"
 chk "read count increments"             "$(GET "$C3" | j "['reads']")" "3"
 chk "full-width also fetches"             "$(GET "$(python3 -c "import sys,urllib.parse;c=sys.argv[1];print(urllib.parse.quote(''.join(chr(ord(x)+0xFEE0) if x.isalnum() else x for x in c)))" "$C3")" | j "['content']")" "multi read"

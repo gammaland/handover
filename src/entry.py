@@ -206,6 +206,20 @@ class Default(WorkerEntrypoint):
                 "Content-Type": "text/x-python; charset=utf-8",
                 "X-Content-SHA256": client_src.SHA256, **CORS})
 
+        # Channel link handover.tools/join/<code> (spec/handoff §4, D64). Same rule as code links: no D1,
+        # nothing joined; a preview crawler must not use up the nameplate.
+        if path.startswith(handoff.JOIN_PATH) and path.count("/") == 2:
+            code = handoff._normalize(path[len(handoff.JOIN_PATH):])
+            if code:
+                pretty = handoff._pretty(code)
+                if wants_html(request):
+                    return Response(docs.join_page(pretty), headers={
+                        "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex",
+                        "Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
+                return Response(docs.join_landing(pretty, base), headers={
+                    "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "no-store",
+                    "X-Robots-Tag": "noindex", **CORS})
+
         # Short URL handover.tools/kvmtrhxp (D38, D39): the code is itself a URL, and the prompt includes the domain,
         # so an agent with nothing configured knows where to fetch. **Opening it does not use up the code**: it only returns instructions, and the real read is a second request;
         # otherwise pasting the link into a chat app would let the preview crawler burn the read-once content (D21).

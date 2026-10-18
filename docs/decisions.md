@@ -9,7 +9,7 @@ Entries are grouped by topic and ordered by number within each group. Numbers ar
 - [Positioning](#positioning): D6, D10, D22, D45, D46
 - [Name and domain](#name-and-domain): D47, D48 / D54
 - [One-shot and codes](#one-shot-and-codes): D20, D21 / D38, D39 / D36, D60
-- [Channel](#channel): D25, D26, D37
+- [Channel](#channel): D25, D26, D37, D64
 - [Privacy and abuse](#privacy-and-abuse): D28, D40, D44, D62
 - [Reaching agents](#reaching-agents): D24, D41, D42, D50
 - [Website](#website): D30 / D31
@@ -120,6 +120,24 @@ A short code is far too weak to serve as an encryption key: 8 letters can be bru
 ### D37 · The server rejects ciphertext that looks like plaintext
 
 Walking through the docs as an agent that knew nothing else turned up a silent failure. The server accepts any base64 on `channel_send`, so a helpful agent could base64-encode *plaintext*, skip the client, and the end-to-end promise would quietly break. ChaCha20-Poly1305 output is indistinguishable from random bytes, and only about 38% of random bytes are printable ASCII. Anything that decodes to fewer than 48 bytes, or to ≥ 90% printable bytes, is now refused with `not_ciphertext`. This guards against misuse, not malice: anyone can XOR their plaintext first. It stops the accident that is most likely to happen.
+
+### D64 · A lost response must not lose a message
+
+The first channel between two machines with nothing set up in advance went wrong three ways in one evening.
+
+- **The joining agent fetched the channel code as a one-shot code.** It had been told "Join handover.tools/<code>", called `handoff_get`, got `not_found_or_expired` and concluded the code was mistyped. The code-link page already listed "it is a channel code" among the causes of a miss; the API, which is what agents call, said nothing. And opening `handover.tools/<code>` showed the one-shot page, Fetch button included.
+- **The client crashed on a dropped connection.** It caught `HTTPError` and `URLError` only, so `RemoteDisconnected` and `IncompleteRead` ended in a traceback with no retry. The other agent's answer was to edit the client and swap its HTTP library. An agent patching the one file whose integrity the whole channel rests on is a worse outcome than the network error. The client now retries a call that got no usable response, up to 3 attempts.
+- **A message was marked read but never shown.** The server moves a side's cursor when it sends the fetch response. When that response doesn't arrive, the server's cursor is already past the message, the next fetch finds nothing, and the sender's status says the peer has read it. The message was only recovered because someone read the client source and found `--after`.
+
+Choices made:
+
+- **A channel link of its own: `handover.tools/join/<code>`.** Explaining the mistake after it happens costs a wasted call and depends on the agent reading the explanation; a different URL prevents it. The link says what it is before anything is called, and opening it returns join steps (Markdown) or a page for the person, with no database access, so a link preview can't use up the nameplate. `handoff_get` recognizes the word "join" in its input (the new link, or the older "Join handover.tools/<code>") and answers `channel_code` with the steps, also without a lookup; no code can contain the word, since `I` and `O` aren't in the alphabet. Rejected: making channel codes a different length, which changes the password and therefore the protocol. The cost is five more characters, in a link that is usually pasted.
+- **A miss now carries one fixed `detail` sentence**, the same list the code-link page shows, as the fallback for a bare code. It is identical for every miss, so it still doesn't reveal whether a code existed.
+
+- **The receiver keeps its own cursor** (`recv_seq`, saved with `recv_n`) and passes it as `after` on every fetch. A lost response is then simply fetched again, with no protocol change and no server change, and replay detection still applies because `after` from the client's own state isn't a recovery re-read. The server's cursor now only feeds the read receipt.
+- **A retried `send` posts the identical ciphertext.** If the first copy was stored, the peer drops the second one by its counter. Sealing again would mean a new `n` and the person would see the message twice. The duplicate costs one of the channel's 200 messages; that is cheaper than a server-side idempotency key.
+- **`join` is never retried.** The first attempt may have consumed the nameplate, and a retry would then report `not_found_or_expired`, the same misleading result as above. The client says the code may be used up instead.
+- **Not done yet:** the read receipt can still be wrong after a lost response. Fixing that needs an explicit acknowledgement (fetch without moving the cursor, then acknowledge what was processed), which changes the protocol. It is listed in spec/channel §10 as a property that isn't claimed.
 
 ---
 

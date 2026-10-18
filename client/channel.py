@@ -19,7 +19,7 @@ messages round by round. The server only ever relays opaque bytes.
 
     mkdir -p ~/.handoff && curl -so ~/.handoff/channel.py https://handover.tools/client/channel.py
     uv run ~/.handoff/channel.py open --name study --brief "explore X for the study agent"
-    uv run channel.py join   kvmtrhxp --name study
+    uv run channel.py join   kvmtrhxp --name study      # or the link: handover.tools/join/kvmtrhxp
     uv run channel.py send   --name study --kind question --file q.md   # after the person approves
     uv run channel.py fetch  --name study                               # when the person asks
     uv run channel.py status --name study
@@ -31,12 +31,12 @@ Without uv:  pip install spake2==0.9  (pulls in cryptography), then python3 chan
 State: ~/.handoff/channels/<name>.json (mode 600). Override the directory with HANDOFF_HOME.
 Server: https://handover.tools. Override with HANDOVER_BASE.
 """
-import argparse, base64, json, os, secrets, sys, unicodedata
+import argparse, base64, http.client, json, os, secrets, sys, time, unicodedata
 import urllib.error, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = "1"
+VERSION = "1.1"
 BASE = os.environ.get("HANDOVER_BASE", "https://handover.tools").rstrip("/")
 HOME = Path(os.environ.get("HANDOFF_HOME", Path.home() / ".handoff")) / "channels"
 ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
@@ -90,18 +90,46 @@ def pretty(code: str) -> str:
 
 
 # ------------------------------------------------------------------ transport
-def call(tool: str, payload: dict) -> dict:
-    # A custom User-Agent matters: Cloudflare's bot rules reject the default Python-urllib one.
-    req = urllib.request.Request(
-        f"{BASE}/api/channel/{tool}", data=json.dumps(payload).encode(), method="POST",
-        headers={"Content-Type": "application/json", "User-Agent": f"handover-channel/{VERSION}"})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        raise Fail(f"server returned HTTP {e.code}: {e.read().decode(errors='replace')}", 2)
-    except urllib.error.URLError as e:
-        raise Fail(f"cannot reach {BASE}: {e.reason}", 2)
+# Edge errors worth another try. 429 and 503 are quota refusals: retrying only burns quota.
+RETRY_HTTP = {502, 504, 520, 521, 522, 523, 524}
+RETRY_WAITS = (1, 3)              # seconds before the 2nd and 3rd attempt (spec/channel §11)
+# What the person should know when a call gives up without a usable response.
+GAVE_UP = {
+    "send": "The message may have reached the server anyway; sending it again may show it twice.",
+    "join": ("The server may have used up the code on that attempt. If joining again says "
+             "not_found_or_expired, ask for a new code."),
+}
+
+
+def call(tool: str, payload: dict, retry: bool = True) -> dict:
+    """POST one call. A failure without a usable response (reset, timeout, truncated body, edge
+    error) is retried with the same body, so a retried send carries the identical ciphertext
+    and the peer drops a stored duplicate as a replay (spec/channel §5.3). join is never
+    retried: the first attempt may already have consumed the nameplate."""
+    data = json.dumps(payload).encode()
+    waits = list(RETRY_WAITS) if retry else []
+    while True:
+        # A custom User-Agent matters: Cloudflare's bot rules reject the default Python-urllib one.
+        req = urllib.request.Request(
+            f"{BASE}/api/channel/{tool}", data=data, method="POST",
+            headers={"Content-Type": "application/json", "User-Agent": f"handover-channel/{VERSION}"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            if e.code not in RETRY_HTTP:
+                raise Fail(f"server returned HTTP {e.code}: {e.read().decode(errors='replace')}", 2)
+            problem = f"HTTP {e.code}"
+        # URLError and socket timeouts are OSErrors; RemoteDisconnected and IncompleteRead are
+        # HTTPExceptions; a body cut short can also surface as a JSON ValueError.
+        except (OSError, http.client.HTTPException, ValueError) as e:
+            problem = str(getattr(e, "reason", "") or e) or type(e).__name__
+        if not waits:
+            hint = GAVE_UP.get(tool, "")
+            raise Fail(f"cannot reach {BASE}: {problem}. {hint}".strip(), 2)
+        wait = waits.pop(0)
+        print(f"network problem ({problem}); retrying in {wait}s", file=sys.stderr)
+        time.sleep(wait)
 
 
 # ------------------------------------------------------------------ state
@@ -221,11 +249,11 @@ def cmd_open(a):
     code = r["nameplate"] + password
     save({"v": 1, "name": a.name, "side": "a", "server": BASE, "key": r["key"],
           "code": pretty(code), "spake": b64e(sp.serialize()), "brief": a.brief or "",
-          "send_n": 0, "recv_n": 0, "confirmed": False, "last_sent_seq": 0,
+          "send_n": 0, "recv_n": 0, "recv_seq": 0, "confirmed": False, "last_sent_seq": 0,
           "created_at": now_iso()})
     print(f"Code: {pretty(code)}")
     print("On the other machine, say this to its agent:")
-    print(f"  \u201cJoin handover.tools/{pretty(code)}\u201d")
+    print(f"  \u201cJoin handover.tools/join/{pretty(code)}\u201d")
     print(f"Pairing must happen before {r['pairing_expires_at']}. "
           f"The server has only seen {r['nameplate'].lower()}; the rest never left this machine.")
 
@@ -235,13 +263,14 @@ def cmd_join(a):
     code = normalize(a.code)
     from spake2 import SPAKE2_B
     sp = SPAKE2_B(code[NAMEPLATE_LEN:].encode(), idA=ID_A, idB=ID_B)
-    r = call("join", {"nameplate": code[:NAMEPLATE_LEN], "pake_msg": b64e(sp.start())})
+    r = call("join", {"nameplate": code[:NAMEPLATE_LEN], "pake_msg": b64e(sp.start())},
+             retry=False)
     if not r.get("key"):
         raise Fail(f"join failed: {r.get('reason')}. The code may be mistyped, already used, "
                    "or older than 60 minutes. Ask for it again; do not guess characters.")
     st = {"v": 1, "name": a.name, "side": "b", "server": BASE, "key": r["key"],
           "k": b64e(sp.finish(b64d(r["peer_pake_msg"]))), "brief": a.brief or "",
-          "send_n": 0, "recv_n": 0, "confirmed": False, "last_sent_seq": 0,
+          "send_n": 0, "recv_n": 0, "recv_seq": 0, "confirmed": False, "last_sent_seq": 0,
           "created_at": now_iso()}
     save(st)
     _send(st, "hello")               # key confirmation: the other side must be able to open it
@@ -250,10 +279,20 @@ def cmd_join(a):
 
 
 def _collect(st: dict, peek: bool, after: int | None):
-    """Fetch every page. Returns (messages, warnings, last server response)."""
+    """Fetch every page. Returns (messages, warnings, last server response).
+
+    after=None is a normal fetch: it starts from recv_seq, the highest seq this client has
+    processed, not from the server's cursor. The server moves its cursor when it sends a
+    response, so after a lost response its cursor is past messages this side never saw
+    (spec/channel §6). An explicit after is a recovery re-read the person asked for."""
     out, warnings, r = [], [], None
     recv_n = st["recv_n"]
     rereading = after is not None     # recovery re-read: old counters are expected, not replays
+    if after is None:
+        after = st.get("recv_seq")
+    # State saved by an older client has no recv_seq: start from the server's cursor once.
+    migrating = after is None
+    top = after or 0
     while True:
         payload = {"key": st["key"], "peek": peek}
         if after is not None:
@@ -261,6 +300,8 @@ def _collect(st: dict, peek: bool, after: int | None):
         r = call("fetch", payload)
         if r.get("messages") is None:
             raise Fail(f"fetch failed: {r.get('reason')}. {r.get('detail', '')}".strip())
+        if migrating:
+            top = max(top, int(r.get("cursor") or 0))
         if st["side"] == "a" and not finish_pairing(st, r):
             return out, warnings, r
         for m in r["messages"]:
@@ -274,11 +315,13 @@ def _collect(st: dict, peek: bool, after: int | None):
                 raise Fail(f"tampered: message #{m['seq']} does not decrypt although pairing was "
                            "confirmed, so it was altered in transit or in storage. Do not trust "
                            "this channel: close it and pair again.", 3)
+            top = max(top, m["seq"])
             n = int(obj.get("n", 0))
             if rereading:
                 pass
             elif n <= recv_n:
-                warnings.append(f"#{m['seq']} repeats sender counter {n}; dropped as a replay")
+                warnings.append(f"#{m['seq']} repeats sender counter {n}; dropped as a duplicate "
+                                "(the sender retried after a network error) or a replay")
                 continue
             if n > recv_n + 1:
                 warnings.append(f"{n - recv_n - 1} message(s) from the peer are missing "
@@ -297,6 +340,7 @@ def _collect(st: dict, peek: bool, after: int | None):
         after = r["messages"][-1]["seq"]
     if not peek and not rereading:
         st["recv_n"] = recv_n
+        st["recv_seq"] = top
     save(st)
     return out, warnings, r
 

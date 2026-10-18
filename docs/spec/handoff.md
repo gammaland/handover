@@ -97,9 +97,14 @@ The server tries the DELETE first, then the UPDATE. A row is one or the other, s
 | `content` | The stored text, or `null` |
 | `label`, `created_at`, `burn_after_read`, `burned`, `reads` | |
 | `expires_at` | Only when not burned |
-| `reason` | `null`, or `not_found_or_expired` |
+| `reason` | `null`, `not_found_or_expired`, or `channel_code` |
+| `detail` | With `not_found_or_expired`: one fixed sentence listing what the person can check. With `channel_code`: how to join instead |
 
 **Unknown, already fetched, revoked and expired are deliberately indistinguishable** (`not_found_or_expired`), so the response never reveals whether a code existed. A malformed code gets a reason explaining the format instead.
+
+`detail` is the same text for every miss, so it reveals nothing either. It lists the possible causes, including the one an agent can't guess: a channel code has the same shape as a one-shot code, but it is joined with the channel client, not fetched (D64). The code-link page shows the same list.
+
+**Channel links are recognized before any lookup.** If the input contains `join` as a word or a path segment (`handover.tools/join/kvmtrhxp`, or `Join handover.tools/kvmtrhxp` as older clients phrase it), the server returns `content: null` with `reason: channel_code` and the join steps in `detail`, without touching the database. This depends only on the input, so it reveals nothing about any code. A code can't contain the word: `I` and `O` aren't in the alphabet.
 
 The fetching agent SHOULD return `content` to the person verbatim and complete. With burn-after-read, its copy is the only one left.
 
@@ -121,6 +126,8 @@ Deletes the row whose `revoke_hash` matches, whether or not it has been fetched.
 | anything else | `text/markdown` instructions for an agent: the real fetch URL (`/api/handoff/get?code=…`), "return it verbatim", and how to join if it is a channel code instead |
 
 Both carry `X-Robots-Tag: noindex` and `Cache-Control: no-store`. The response is identical whether or not the code exists. Paths the site already uses (`/guide`, `/llms.txt`, …) take precedence over code links.
+
+`GET /join/<code>` is the **channel link** (spec/channel §2). It follows the same rules: it MUST NOT touch the database or the channel, so a link preview can't use up the nameplate, and its response is identical whether or not the channel exists. A browser gets a page telling the person to give the link to an agent that can run commands; anything else gets Markdown with the commands to download the client and join. Neither mentions `handoff_get`.
 
 ## 5. Limits
 

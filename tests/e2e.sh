@@ -76,6 +76,12 @@ chk "instructions include the real fetch URL"      "$(curl -s $B/kvmtrhxp | grep
 chk "instructions explain how to join a channel"  "$(curl -s $B/kvmtrhxp | grep -c 'channel.py join kvmtrhxp')" "1"
 chk "browser: homepage + prefilled code"    "$(curl -s -H 'Accept: text/html' $B/kvmtrhxp | grep -c 'window.PREFILL = "KVMTRHXP"')" "1"
 chk "prefill doesn't fetch"                  "$(curl -s -H 'Accept: text/html' $B/kvmtrhxp | grep -c 'PREFILL.*fetchIt\|fetchIt();$')" "0"
+echo "── channel link handover.tools/join/<code> (spec/handoff §4, spec/channel §2) ──"
+chk "channel link gives the agent join steps"     "$(curl -s $B/join/KVMT-RHXP | head -1)" "# handover channel kvmtrhxp"
+chk "join steps use the client, not handoff_get"  "$(curl -s $B/join/kvmtrhxp | grep -c 'channel.py join kvmtrhxp')$(curl -s $B/join/kvmtrhxp | grep -c 'api/handoff/get')" "10"
+chk "browser gets the channel-link page"          "$(curl -s -H 'Accept: text/html' $B/join/kvmtrhxp | grep -c '<h1>Channel link</h1>')" "1"
+chk "channel links kept out of search"            "$(curl -sI $B/join/kvmtrhxp | grep -ic 'x-robots-tag: noindex')$(curl -sI -H 'Accept: text/html' $B/join/kvmtrhxp | grep -ic 'x-robots-tag: noindex')" "11"
+chk "a malformed channel link is a 404"           "$(curl -s -o /dev/null -w '%{http_code}' $B/join/zzz)" "404"
 chk "security page numbers use 22 letters"    "$(curl -s $B/security | grep -c '32<sup>')$(curl -s $B/security.md | grep -c '32^')" "00"
 chk "social preview image"                 "$(curl -s -o /dev/null -w '%{http_code} %{content_type}' $B/og.png)" "200 image/png"
 chk "favicon.ico (search result icon)"   "$(curl -s -o /dev/null -w '%{http_code} %{content_type}' $B/favicon.ico)" "200 image/vnd.microsoft.icon"
@@ -224,6 +230,10 @@ python3 -c "import json;print(json.dumps({'content':'x'*(256*1024+10)}))" > /tmp
 chk "oversized content refused"          "$(curl -s -X POST $B/api/handoff/put -H 'Content-Type: application/json' --data-binary @/tmp/_big.json | j "['code']")" "None"
 chk "invalid code is explained"          "$(GET "zzz" | j "['content']")" "None"
 chk "unknown code doesn't leak existence"     "$(GET "22222222" | j "['reason']")" "not_found_or_expired"
+chk "a miss names the possible causes, channel codes included (spec/handoff §3.2)"  "$(GET "22222222" | j "['detail']" | grep -c 'channel client')" "1"
+chk "the same detail for an unknown and a fetched code"  "$([ "$(GET "22222222" | j "['detail']")" = "$(GET "$C" | j "['detail']")" ] && echo same)" "same"
+chk "handoff_get recognizes a channel link, old and new (spec/handoff §3.2)"  "$(GET "handover.tools%2Fjoin%2Fkvmtrhxp" | j "['reason']") $(GET "Join%20handover.tools%2Fkvmtrhxp" | j "['reason']")" "channel_code channel_code"
+chk "channel_code says how to join"               "$(GET "handover.tools%2Fjoin%2Fkvmtrhxp" | j "['detail']" | grep -c 'channel.py join kvmtrhxp')" "1"
 chk "invalid revoke_key refused"  "$(REVOKE "tooshort" | j "['revoked']")" "False"
 chk "TTL capped at 1440"   "$(PUT '{"content":"x","ttl_minutes":99999}' | j "['expires_in_minutes']")" "1440"   # write 4
 chk "MCP can put too"         "$(curl -s -X POST $B/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"handoff_put","arguments":{"content":"via mcp"}}}' | j "['result']['structuredContent']['burn_after_read']")" "True"   # write 5

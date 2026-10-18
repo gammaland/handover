@@ -22,9 +22,12 @@ CODE=$(head -1 <<<"$OUT" | awk '{print $2}')
 chk "open returns an 8-letter lowercase code"     "$(grep -cE '^[a-z]{8}$' <<<"$CODE")" "1"
 chk "server only saw the nameplate"             "$(has "$OUT" "has only seen ${CODE:0:3}")" "1"
 chk "cannot send before pairing"               "$(RUN a send --name t --text x 2>&1 | grep -c 'not joined')" "1"
+# A link preview opening the channel link must not use up the nameplate: B joins right after (spec/handoff §4)
+curl -s "$HANDOVER_BASE/join/$CODE" >/dev/null; curl -s -H 'Accept: text/html' "$HANDOVER_BASE/join/$CODE" >/dev/null
 chk "B joins with a full-width code (CJK input method)"  "$(RUN b join "$(python3 -c "import sys;print(''.join(chr(ord(x)+0xFEE0) if x.isalnum() else x for x in sys.argv[1].lower()))" "$CODE")" --name t | grep -c 'Paired as side B')" "1"
 chk "client parses the code from a full link"     "$(cd "$T" && uv run -q --with spake2==0.9 python -c 'import channel as c;print(c.normalize("https://handover.tools/kvmtrhxp"), c.normalize("handover.tools/api/handoff/get?code=K7M2-4QX9&x=1"))')" "KVMTRHXP K7M24QX9"
-chk "open tells the person what to say on the other machine"   "$(has "$OUT" "Join handover.tools/")" "1"
+chk "open tells the person what to say on the other machine"   "$(has "$OUT" "Join handover.tools/join/$CODE")" "1"
+chk "client parses the channel link"     "$(cd "$T" && uv run -q --with spake2==0.9 python -c 'import channel as c;print(c.normalize("https://handover.tools/join/kvmtrhxp"))')" "KVMTRHXP"
 chk "the same code cannot be joined twice"           "$(RUN c join "$CODE" --name t 2>&1 | grep -c not_found_or_expired)" "1"
 chk "A decrypts hello, pairing confirmed"        "$(RUN a fetch --name t | grep -c 'pairing confirmed')" "1"
 chk "local state file is 600"             "$(stat -c %a "$T/a/channels/t.json" 2>/dev/null || stat -f %Lp "$T/a/channels/t.json")" "600"
@@ -44,6 +47,49 @@ chk "B sees its question was read"        "$(has "$F" "the peer has fetched it")
 chk "fetching again has no new messages"               "$(RUN b fetch --name t | grep -c 'No new messages')" "1"
 chk "after=0 re-reads"               "$(RUN b fetch --name t --after 0 --json | grep -c 'conditional update is atomic')" "1"
 
+echo "── a lost fetch response is fetched again (spec/channel §6, recv_seq) ──"
+RUN a send --name t --kind note --text "LOST-RESPONSE-MARKER" >/dev/null
+# What a response lost in transit leaves behind: the server moved B's cursor, B's client never saw the message
+BKEY=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["key"])' "$T/b/channels/t.json")
+curl -s -X POST "$HANDOVER_BASE/api/channel/fetch" -H 'Content-Type: application/json' \
+     --data-binary "$(python3 -c 'import json,sys;print(json.dumps({"key":sys.argv[1]}))' "$BKEY")" >/dev/null
+F=$(RUN b fetch --name t)
+chk "B still receives the message"               "$(has "$F" "LOST-RESPONSE-MARKER")" "1"
+chk "and only once"                              "$(RUN b fetch --name t | grep -c 'No new messages')" "1"
+
+echo "── transport retries (spec/channel §5.3, §11) ──"
+R=$(cd "$T" && uv run -q --with spake2==0.9 python - 2>/dev/null <<'PY'
+import http.client, io
+import channel as c
+c.RETRY_WAITS = (0, 0)
+class Resp(io.BytesIO):
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+def flaky(errors, calls):
+    def urlopen(req, timeout=None):
+        calls.append(req.data)
+        if errors:
+            raise errors.pop(0)
+        return Resp(b'{"ok": true}')
+    return urlopen
+calls = []
+c.urllib.request.urlopen = flaky([http.client.RemoteDisconnected("gone"), http.client.IncompleteRead(b"{")], calls)
+print("retried", c.call("send", {"ciphertext": "X"}) == {"ok": True}, len(calls), len(set(calls)))
+for tool, kw, errs in (("join", {"retry": False}, [ConnectionResetError("reset")]),
+                       ("fetch", {}, [TimeoutError("timed out")] * 3)):
+    calls = []
+    c.urllib.request.urlopen = flaky(errs, calls)
+    try:
+        c.call(tool, {}, **kw)
+        print(tool, "no error")
+    except c.Fail as e:
+        print(tool, e.code, len(calls), "new code" in str(e))
+PY
+)
+chk "a dropped connection and a truncated body are retried with the same body"  "$(grep -c '^retried True 3 1$' <<<"$R")" "1"
+chk "join is not retried and says the code may be used up"  "$(grep -c '^join 2 1 True$' <<<"$R")" "1"
+chk "other calls give up after 3 attempts with exit code 2" "$(grep -c '^fetch 2 3 False$' <<<"$R")" "1"
+
 if [ "$LOCAL" = "1" ]; then
 echo "── attacks: replay, tampering (spec/channel §6; local only, edits D1 directly) ──"
 RUN a send --name t --kind note --text "note-1" >/dev/null
@@ -52,7 +98,7 @@ chk "no plaintext anywhere in D1"            "$(npx wrangler d1 execute handover
 d1 "INSERT INTO channel_messages (channel_id,seq,side,ciphertext,sent_at) SELECT m.channel_id, c.next_seq+1, m.side, m.ciphertext, m.sent_at FROM channel_messages m JOIN channels c ON c.id=m.channel_id WHERE m.side='a' ORDER BY m.seq DESC LIMIT 1"
 d1 "UPDATE channels SET next_seq=next_seq+1 WHERE id=(SELECT channel_id FROM channel_messages WHERE side='a' ORDER BY seq DESC LIMIT 1)"
 F=$(RUN b fetch --name t)
-chk "replay detected and dropped"             "$(has "$F" "dropped as a replay")" "1"
+chk "replay detected and dropped"             "$(has "$F" "repeats sender counter")" "1"
 chk "normal message still delivered"             "$(has "$F" "note-1")" "1"
 RUN a send --name t --kind note --text "note-2" >/dev/null
 d1 "UPDATE channel_messages SET ciphertext = substr(ciphertext,1,20) || 'AAAA' || substr(ciphertext,25) WHERE side='a' AND seq=(SELECT MAX(seq) FROM channel_messages WHERE side='a')"

@@ -330,7 +330,8 @@ async def channel_send(args, env):
         "Use the local client at https://handover.tools/client/channel.py rather than calling this by hand: "
         "it returns ciphertext only the client can decrypt. Returns the peer's messages this side "
         "has not fetched yet, and marks them read so the peer can see they arrived. Call only when the person asks. peek=true reads without "
-        "marking; after=N re-reads from sequence N (recovery). Side A also receives the peer's "
+        "marking; after=N returns messages after sequence N (the client passes the last one it "
+        "processed, so a response lost in transit is fetched again; a smaller N re-reads). Side A also receives the peer's "
         "SPAKE2 message here to finish pairing. Large backlogs are paged: more=true means "
         "fetch again."
     ),

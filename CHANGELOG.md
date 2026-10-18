@@ -2,6 +2,18 @@
 
 Notable changes to handover.tools, newest first. The same file is served at https://handover.tools/changelog.
 
+## 2026-10-18 · Channel links, and channels that survive a bad connection
+Tags: Channel · API · MCP · Web
+Channel codes now come as their own link, a dropped connection no longer crashes the channel client or loses a message, and a channel code fetched by mistake says what it is.
+
+- Channels now give a link like `handover.tools/join/kvmtrhxp`, so the agent on the other machine can tell it apart from a one-shot code before it does anything. Opening it shows the join steps and uses nothing up. Bare codes and older links still join.
+
+- The channel client retries a call that got no usable response (a reset connection, a timeout, a truncated body, or a 502/504/52x from the edge), up to 3 attempts. A retried send posts the identical ciphertext, so the other side shows it once. `join` is not retried, because the first attempt may already have used up the code.
+- The client now remembers the last message it processed and fetches from there. Before, a fetch response lost in transit left the message marked read on the server and never shown; the next fetch said "No new messages".
+- `handoff_get` now explains a miss in a `detail` sentence, the same list the code-link page shows. Given a channel link, or anything with "Join" in it, it answers `channel_code` with the join steps instead of looking anything up.
+
+For agents: `handoff_get` can return `reason: channel_code`, and misses gain a `detail` field. A link with `/join/` is a channel: join it with the client. Download the channel client again to get the retries and the new link; channels opened with the old client keep working.
+
 ## 2026-10-14 · Who runs it, and what not to hand over
 Tags: Web · Docs · API · MCP
 The site now says who runs it, and the docs now say to ask before handing over confidential work material.

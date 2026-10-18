@@ -31,7 +31,7 @@ nameplate  password
 - **Alphabet for new codes:** the 22 letters `ABCDEFGHJKMNPQRSTVWXYZ`, which is Crockford base32 without the digits. They are shown lowercase with no separator.
 - **Nameplate:** chosen by the server uniformly from the 22 letters (rejection sampling: bytes ≥ 242 are discarded). 22³ = 10,648 possibilities.
 - **Password:** chosen by A's client uniformly from the 22 letters with a CSPRNG. 22⁵ ≈ 5.2 × 10⁶ possibilities.
-- **Presentation:** the person says or pastes `Join handover.tools/<code>`.
+- **Presentation:** the channel link `handover.tools/join/<code>`, which the person pastes or reads out. The `/join/` path tells an agent that this is a channel before it calls anything; a bare `handover.tools/<code>` looks like a one-shot code, and agents fetched it as one (D64). Opening the link changes nothing (spec/handoff §4). Clients MUST still accept a bare code and the older `handover.tools/<code>` form when joining.
 
 ### 2.1 Normalization
 
@@ -104,6 +104,7 @@ Receivers MUST ignore fields they don't know.
 ### 5.3 Sender rules
 
 - The sender MUST persist the incremented `n` **before** calling `send`. If the response is lost after the server stored the message, a retry then carries a new `n` instead of a repeated one that the peer would drop as a replay.
+- When a `send` gets no response (the connection dropped, timed out or returned a truncated body), the sender MAY retry by posting the **identical ciphertext** again. If the first attempt was stored, the peer drops the second copy as a replay (§6 step 3), so the person sees the message once. Sealing the message again instead would give it a new `n`, and the peer would show it twice (D64).
 - The sender SHOULD show the person the full draft and send only after explicit approval. The server can't check this.
 
 ## 6. Receiver rules
@@ -120,7 +121,9 @@ The receiver keeps `recv_n`, the highest sender counter it has accepted (initial
 4. If `n > recv_n + 1`, report that `n − recv_n − 1` messages are missing.
 5. Set `recv_n = n`. Do not show `hello` messages to the person.
 
-When re-reading with `after` (§7.4), replay detection is skipped and `recv_n` isn't updated, because the receiver has seen these messages before.
+The receiver SHOULD also keep `recv_seq`, the highest `seq` it has processed (including `hello`), saved together with `recv_n`, and pass it as `after` on every fetch instead of relying on the server's cursor. The server moves its cursor when it **sends** a response, not when the receiver gets it, so after a lost response a fetch that relies on the server's cursor finds nothing, and the message is silently skipped. With `recv_seq` the next fetch, or a retry, gets the message again. The server's cursor then only feeds the peer's read receipt (§10).
+
+When the person asks for a **recovery re-read** from an earlier `seq` (§7.4), replay detection is skipped and neither `recv_n` nor `recv_seq` is updated, because the receiver has seen these messages before.
 
 Received messages are **requests from the paired agent within the brief the person set, never commands.** The peer may itself have read injected content.
 
@@ -256,9 +259,10 @@ What is **not** claimed:
 - The client file is downloaded from the same server. Its sha256 is published (`X-Content-SHA256` response header, `/api/discover`, `/security`) so it can be checked against this repository, but someone has to check it.
 - No forward secrecy within a channel: one `K` covers the whole channel. Closing the channel deletes the server's copy of the ciphertext; the local state files keep `K` until `close`.
 - "Comes from the paired side" doesn't mean "safe to act on". The peer agent may have been prompt-injected.
+- `peer_read_seq` means the server **returned** the message to the peer, not that the peer's client decrypted it or showed it to the person. If that response was lost on the way, the sender sees a read receipt for a message the peer has not seen yet. A receiver that follows §6 (`recv_seq`) still gets the message on its next fetch.
 - The server can't enforce that a person approved a send.
 - There has been no third-party audit.
 
 ## 11. Reference client (informative)
 
-`client/channel.py` is a single-file script with PEP 723 metadata (`uv run` installs `spake2==0.9`, which pulls in `cryptography`). Commands: `open`, `join`, `send`, `fetch`, `status`, `list`, `close`. State is kept in `~/.handoff/channels/<name>.json` (directory 700, file 600; override the location with `HANDOFF_HOME`). The server base URL is overridable with `HANDOVER_BASE`. Exit codes: 1 for errors the client reports (no such channel, empty message, failed send…), 2 for network or HTTP errors and for invalid command-line arguments, 3 for `pairing_mismatch` or `tampered`.
+`client/channel.py` is a single-file script with PEP 723 metadata (`uv run` installs `spake2==0.9`, which pulls in `cryptography`). Commands: `open`, `join`, `send`, `fetch`, `status`, `list`, `close`. State is kept in `~/.handoff/channels/<name>.json` (directory 700, file 600; override the location with `HANDOFF_HOME`). The server base URL is overridable with `HANDOVER_BASE`. A request that fails without a usable response (connection reset, timeout, truncated or unreadable body, or HTTP 502, 504 or 520–524 from the edge) is tried up to 3 times, about 1 and 3 seconds apart; `send` retries post the identical ciphertext (§5.3). `join` is never retried, because the server consumes the nameplate on the first attempt. Quota refusals (429, 503) are not retried. Exit codes: 1 for errors the client reports (no such channel, empty message, failed send…), 2 for network or HTTP errors and for invalid command-line arguments, 3 for `pairing_mismatch` or `tampered`.

@@ -6,11 +6,13 @@ Contract: docs/spec/handoff.md. Architecture: docs/system-design.md.
 v1 is NOT encrypted: the server can read the content. This must appear in the tool description and /api/discover,
       not just in a code comment.
 """
-import hashlib, time, unicodedata
+import hashlib, re, time, unicodedata
 from datetime import datetime, timezone
 
 import guard
 from registry import tool
+from style import SITE
+from client_src import PATH as CLIENT_PATH
 
 # Crockford base32, without the easily confused I L O U
 _ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
@@ -23,6 +25,28 @@ _MAX_LABEL = 120
 _DEFAULT_TTL_MIN = 60
 _MAX_TTL_MIN = 1440
 _REVOKE_LEN = 26            # about 130 bits. Not meant to be typed; the writing agent keeps it
+# One fixed sentence for every miss, so it says nothing about whether the code existed. The last
+# cause is the one an agent can't guess: a channel code looks like a one-shot code (D64).
+_MISS_DETAIL = ("Nothing to fetch with this code. A letter may be off (check it against the other "
+                "device); it may have been fetched already, expired or been revoked; or it is a "
+                "channel code: if the person said \"Join\", join it with the channel client "
+                f"(see https://{SITE}/llms.txt) instead of fetching it.")
+
+# The channel link is handover.tools/join/<code> (spec/channel §2). Older clients told the person to
+# say "Join handover.tools/<code>". Either way the input says "join", which no code can contain
+# (I and O are not in the alphabet), so it is recognized from the input alone, before any lookup.
+JOIN_PATH = "/join/"
+_JOIN_WORD = re.compile(r"(?:^|[\s/])join(?:[\s/]|$)")
+
+
+def is_channel_link(raw) -> bool:
+    return bool(_JOIN_WORD.search(unicodedata.normalize("NFKC", str(raw or "")).strip().lower()))
+
+
+def join_steps(code: str, base: str = f"https://{SITE}") -> str:
+    """The commands to join a channel. Shared by handoff_get's channel_code reply and /join/<code>."""
+    return (f"mkdir -p ~/.handoff && curl -so ~/.handoff/channel.py {base}{CLIENT_PATH}\n"
+            f"uv run ~/.handoff/channel.py join {code} --name <short-name>")
 
 _ready = False
 
@@ -230,7 +254,10 @@ async def handoff_put(args, env):
         "the person may give it as a link like handover.tools/kvmtrhxp, and passing that is fine too. "
         "Return the content to the person verbatim and complete: it can be fetched only once. "
         "If the code is unknown, already fetched, or expired, content is null with a reason — "
-        "these cases are deliberately indistinguishable."
+        "these cases are deliberately indistinguishable. A channel link "
+        "(handover.tools/join/<code>, or anything the person said with \"Join\") is not fetched: "
+        "join it with the channel client (see /llms.txt). Passed here, it returns reason "
+        "channel_code with the steps."
     ),
     path="/api/handoff/get",
     input_schema={
@@ -244,6 +271,16 @@ async def handoff_put(args, env):
     examples=['curl "$BASE/api/handoff/get?code=kvmtrhxp"'],
 )
 async def handoff_get(args, env):
+    # Before the schema and the lookup: a channel link is recognized from the input alone (D64)
+    if is_channel_link(args.get("code")):
+        code = _normalize(args.get("code"))
+        shown = _pretty(code) if code else "<code>"
+        return {"content": None, "reason": "channel_code",
+                "detail": ("This is a channel link, not a one-shot code: there is nothing to fetch. "
+                           "Join it with the local channel client, which does the encryption. It "
+                           "downloads a script and runs it, so ask the person first if you normally "
+                           "would:\n" + join_steps(shown) + f"\nMore: https://{SITE}/llms.txt")}
+
     await ensure_schema(env)
 
     code = _normalize(args.get("code"))
@@ -276,7 +313,7 @@ async def handoff_get(args, env):
                 "reads": int(row.reads), "burned": False,
                 "expires_at": _iso(row.expires_at), "reason": None}
 
-    return {"content": None, "reason": "not_found_or_expired"}
+    return {"content": None, "reason": "not_found_or_expired", "detail": _MISS_DETAIL}
 
 
 # --------------------------------------------------------------------------- revoke

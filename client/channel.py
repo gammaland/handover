@@ -282,9 +282,11 @@ def _collect(st: dict, peek: bool, after: int | None):
     """Fetch every page. Returns (messages, warnings, last server response).
 
     after=None is a normal fetch: it starts from recv_seq, the highest seq this client has
-    processed, not from the server's cursor. The server moves its cursor when it sends a
-    response, so after a lost response its cursor is past messages this side never saw
-    (spec/channel §6). An explicit after is a recovery re-read the person asked for."""
+    processed, not from the server's cursor. An explicit after is a recovery re-read the person
+    asked for. The server is always asked with peek, so fetching marks nothing; unless peek is
+    requested here, the messages are acknowledged with ack once they are processed and saved.
+    The peer's read receipt then means "processed here", and a response lost in transit can
+    neither skip a message nor report it read (spec/channel §6, D64)."""
     out, warnings, r = [], [], None
     recv_n = st["recv_n"]
     rereading = after is not None     # recovery re-read: old counters are expected, not replays
@@ -294,7 +296,7 @@ def _collect(st: dict, peek: bool, after: int | None):
     migrating = after is None
     top = after or 0
     while True:
-        payload = {"key": st["key"], "peek": peek}
+        payload = {"key": st["key"], "peek": True}
         if after is not None:
             payload["after"] = after
         r = call("fetch", payload)
@@ -341,7 +343,18 @@ def _collect(st: dict, peek: bool, after: int | None):
     if not peek and not rereading:
         st["recv_n"] = recv_n
         st["recv_seq"] = top
-    save(st)
+    save(st)                          # before ack: never acknowledge what isn't saved yet
+    if not peek:
+        # Also with nothing new: ack is what slides the channel's expiry (spec/channel §8)
+        try:
+            ack = call("ack", {"key": st["key"], "seq": top})
+            if ack.get("cursor") is None:
+                raise Fail(f"{ack.get('reason')}")
+            r["peer_read_seq"] = ack.get("peer_read_seq", r.get("peer_read_seq"))
+            r["expires_at"] = ack.get("expires_at", r.get("expires_at"))
+        except Fail as e:
+            warnings.append(f"could not confirm receipt to the server ({e}); the messages below "
+                            "arrived, but the other side may not see them as read yet")
     return out, warnings, r
 
 

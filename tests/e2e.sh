@@ -122,8 +122,9 @@ chk "non-code paths still 404"         "$(curl -s -o /dev/null -w '%{http_code}'
 chk "full links parse"    "$(curl -s "$B/api/handoff/get?code=handover.tools%2FZZZZ-ZZZZ" | j "['reason']")" "not_found_or_expired"
 chk "full-width code normalised"            "$(curl -s "$B/api/handoff/get?code=%EF%BC%92%EF%BC%92%EF%BC%92%EF%BC%92%EF%BC%92%EF%BC%92%EF%BC%92%EF%BC%92" | j "['reason']")" "not_found_or_expired"
 chk "full-width nameplate normalised"        "$(CH join '{"nameplate":"ＺＺＺ","pake_msg":"AAAA"}' | j "['reason']")" "not_found_or_expired"
-chk "MCP descriptions give the client's full URL"  "$(curl -s -X POST $B/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | grep -o 'https://handover.tools/client/channel.py' | wc -l | tr -d ' ')" "4"
+chk "MCP descriptions give the client's full URL"  "$(curl -s -X POST $B/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | grep -o 'https://handover.tools/client/channel.py' | wc -l | tr -d ' ')" "5"
 chk "join with an unknown nameplate"         "$(CH join '{"nameplate":"ZZZ","pake_msg":"AAAA"}' | j "['reason']")" "not_found_or_expired"
+chk "ack with an unknown key"                 "$(CH ack '{"key":"ZZZZZZZZZZZZZZZZZZZZZZZZZZ","seq":1}' | j "['reason']")" "not_found_or_closed"
 chk "join refuses non-base64"      "$(CH join '{"nameplate":"ZZZ","pake_msg":"not base64!"}' | j "['key']")" "None"
 chk "fake key fetch"            "$(CH fetch '{"key":"ZZZZZZZZZZZZZZZZZZZZZZZZZZ"}' | j "['reason']")" "not_found_or_closed"
 FAKE_SEND=$(python3 -c 'import os,base64,json;print(json.dumps({"key":"Z"*26,"ciphertext":base64.b64encode(os.urandom(64)).decode()}))')
@@ -141,7 +142,7 @@ chk "text format"            "$(curl -s "$B/api/discover?format=text" | head -1)
 echo "── MCP, legacy era (system-design §9) ──"
 I='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}'
 chk "protocol version negotiation"          "$(curl -s -X POST $B/mcp -H 'Content-Type: application/json' -d "$I" | j "['result']['protocolVersion']")" "2025-06-18"
-chk "tools/list has 8 tools" "$(curl -s -X POST $B/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | j "['result']['tools']" | python3 -c 'import json,sys;print(len(json.load(sys.stdin)))')" "8"
+chk "tools/list has 9 tools" "$(curl -s -X POST $B/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | j "['result']['tools']" | python3 -c 'import json,sys;print(len(json.load(sys.stdin)))')" "9"
 chk "unknown tool errors"          "$(curl -s -X POST $B/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"nope"}}' | j "['error']['code']")" "-32602"
 chk "ping"                 "$(curl -s -X POST $B/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":4,"method":"ping"}' | j "['result']")" "{}"
 
@@ -273,6 +274,13 @@ chk "A gets the ciphertext unchanged"          "$(CH fetch "$(jb key=$KA)" | j "
 chk "nothing new after fetching"          "$(CH fetch "$(jb key=$KA)" | j "['messages']")" "[]"
 chk "after=0 re-reads"          "$(CH fetch "$(jb key=$KA after=0)" | j "['messages'][0]['seq']")" "1"
 chk "B sees A has read"           "$(CH fetch "$(jb key=$KB peek=true)" | j "['peer_read_seq']")" "1"
+CH send "$(jb key=$KB ciphertext=$CT)" >/dev/null     # seq 2
+CH fetch "$(jb key=$KA peek=true)" >/dev/null
+chk "a peek fetch gives no read receipt (spec/channel §7.5)"  "$(CH fetch "$(jb key=$KB peek=true)" | j "['peer_read_seq']")" "1"
+chk "ack marks it read"                 "$(CH ack "$(jb key=$KA seq=2)" | j "['cursor']") $(CH fetch "$(jb key=$KB peek=true)" | j "['peer_read_seq']")" "2 2"
+chk "ack never moves back"              "$(CH ack "$(jb key=$KA seq=1)" | j "['cursor']")" "2"
+chk "ack can't run ahead of stored messages"  "$(CH ack "$(jb key=$KA seq=99)" | j "['cursor']")" "2"
+chk "ack needs a non-negative seq"      "$(CH ack "$(jb key=$KA seq=-1)" | j "['reason']" | grep -c 'non-negative')" "1"
 chk "B doesn't receive its own message"       "$(CH fetch "$(jb key=$KB)" | j "['messages']")" "[]"
 chk "B's fetch has no pairing material"  "$(CH fetch "$(jb key=$KB)" | j ".get('peer_pake_msg')")" "None"
 chk "close"                   "$(CH close "$(jb key=$KB)" | j "['closed']")" "True"

@@ -175,6 +175,7 @@ Both agents must be able to run commands: channel encrypts on your machines with
 1. Machine A: "Open a handover.tools channel to review this project with my other machine." (say what the agents will work on) → a link.
 2. Machine B: "Join handover.tools/join/kvmtrhxp." The agent may ask before downloading and running the client; say yes.
 3. Every round: "Send it to the handover channel." (after reading the draft) / "Fetch the handover channel."
+   To check, ask "Has the other side read it?": a message shows as read only once the other side's client has received it.
 - Done: "Close the handover channel."
 
 ## Use it every day? Add MCP (optional)
@@ -444,6 +445,8 @@ _HANDOFF_BODY = (
          "The two machines are paired. The link can't be used again."),
         ("Each round", _say("Send it to the handover channel.") + "<br>" + _say("Fetch the handover channel."),
          "You read each draft before it goes. The other side only fetches when you ask. "
+         "To check whether it has, ask your agent “Has the other side read it?”: a message only "
+         "shows as read once the other side's client has received it. "
          "Saying “handover” lets a new conversation know which channel you mean."),
         ("Either machine", _say("Close the handover channel."),
          "Every message is deleted from the server.", True),

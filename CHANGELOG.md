@@ -2,6 +2,17 @@
 
 Notable changes to handover.tools, newest first. The same file is served at https://handover.tools/changelog.
 
+## 2026-10-18 · Read receipts you can trust
+Tags: Channel · API · MCP · Docs
+"The peer has fetched it" now means the other side's client processed the message, not that the server sent it.
+
+- New call `channel_ack`. The channel client fetches without marking anything, saves what it received, and then acknowledges the highest message it processed. A response lost on the way can no longer turn into a read receipt for a message the other side never saw.
+- `ack` never moves backwards or past the last stored message, so retrying it is harmless. It also keeps an active channel from expiring, which fetching used to do.
+- Fetching without `peek` works as before, for older clients.
+- The guide now says how to check: ask your agent "Has the other side read it?".
+
+For agents: one new MCP tool, `channel_ack`; don't call it by hand, the client does. Download the channel client again to get it.
+
 ## 2026-10-18 · Channel links, and channels that survive a bad connection
 Tags: Channel · API · MCP · Web
 Channel codes now come as their own link, a dropped connection no longer crashes the channel client or loses a message, and a channel code fetched by mistake says what it is.

@@ -57,6 +57,37 @@ F=$(RUN b fetch --name t)
 chk "B still receives the message"               "$(has "$F" "LOST-RESPONSE-MARKER")" "1"
 chk "and only once"                              "$(RUN b fetch --name t | grep -c 'No new messages')" "1"
 
+echo "── read receipts come from the receiver (spec/channel §6, §7.5) ──"
+SEQ=$(RUN a send --name t --kind note --text "RECEIPT-MARKER" | sed -E 's/^Sent #([0-9]+).*/\1/')
+# B's client fetched (peek) but died before it could process and ack: A must not see it as read
+curl -s -X POST "$HANDOVER_BASE/api/channel/fetch" -H 'Content-Type: application/json' \
+     --data-binary "$(python3 -c 'import json,sys;print(json.dumps({"key":sys.argv[1],"peek":True}))' "$BKEY")" >/dev/null
+chk "no read receipt before B has processed it"  "$(RUN a status --name t | grep -c "peer has read up to #$SEQ")" "0"
+chk "B gets it"                                  "$(has "$(RUN b fetch --name t)" "RECEIPT-MARKER")" "1"
+chk "then A sees it as read"                     "$(RUN a status --name t | grep -c "peer has read up to #$SEQ")" "1"
+SEQ2=$(RUN a send --name t --kind note --text "ACK-LOST-MARKER" | sed -E 's/^Sent #([0-9]+).*/\1/')
+W=$(cd "$T" && HANDOFF_HOME="$T/b" uv run -q --with spake2==0.9 python - 2>/dev/null <<'PY'
+import channel as c
+real = c.call
+seen = []
+def record(tool, payload, **kw):
+    seen.append((tool, payload.get("peek")))
+    if tool == "ack":
+        raise c.Fail("cannot reach the server", 2)
+    return real(tool, payload, **kw)
+c.call = record
+msgs, warnings, r = c._collect(c.load("t"), peek=False, after=None)
+print("shown", any("ACK-LOST-MARKER" in m["body"] for m in msgs))
+print("warned", any("could not confirm receipt" in w for w in warnings))
+print("calls", " ".join(f"{t}:{p}" for t, p in seen))
+PY
+)
+chk "the client fetches with peek, then acks"   "$(grep -c '^calls fetch:True ack:None$' <<<"$W")" "1"
+chk "a failed ack still shows the message"       "$(grep -c '^shown True$' <<<"$W")" "1"
+chk "and warns that it may not show as read"     "$(grep -c '^warned True$' <<<"$W")" "1"
+chk "the next fetch acks it, without showing it again"  "$(RUN b fetch --name t | grep -c 'ACK-LOST-MARKER')" "0"
+chk "and A then sees it as read"                 "$(RUN a status --name t | grep -c "peer has read up to #$SEQ2")" "1"
+
 echo "── transport retries (spec/channel §5.3, §11) ──"
 R=$(cd "$T" && uv run -q --with spake2==0.9 python - 2>/dev/null <<'PY'
 import http.client, io
@@ -123,7 +154,7 @@ RUN a open --name second >/dev/null
 chk "with several, lists names to choose from"        "$(RUN a fetch 2>&1 | grep -c 'several local channels (second, t)')" "1"
 RUN a close --name second >/dev/null
 
-echo "── close (spec/channel §7.5) ──"
+echo "── close (spec/channel §7.6) ──"
 chk "A close"                     "$(RUN a close --name t | grep -c 'deleted the channel')" "1"
 chk "B then cannot fetch"                 "$(RUN b fetch --name t 2>&1 | grep -c not_found_or_closed)" "1"
 chk "A local state deleted"               "$(ls "$T/a/channels/t.json" 2>/dev/null | wc -l | tr -d ' ')" "0"

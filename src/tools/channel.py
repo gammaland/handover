@@ -329,8 +329,9 @@ async def channel_send(args, env):
     summary=(
         "Use the local client at https://handover.tools/client/channel.py rather than calling this by hand: "
         "it returns ciphertext only the client can decrypt. Returns the peer's messages this side "
-        "has not fetched yet, and marks them read so the peer can see they arrived. Call only when the person asks. peek=true reads without "
-        "marking; after=N returns messages after sequence N (the client passes the last one it "
+        "has not fetched yet. Call only when the person asks. Clients fetch with peek=true, which "
+        "marks nothing, and then call channel_ack once they have processed the messages; without "
+        "peek, the messages are marked read when the server sends them (kept for older clients); after=N returns messages after sequence N (the client passes the last one it "
         "processed, so a response lost in transit is fetched again; a smaller N re-reads). Side A also receives the peer's "
         "SPAKE2 message here to finish pairing. Large backlogs are paged: more=true means "
         "fetch again."
@@ -405,6 +406,61 @@ async def channel_fetch(args, env):
     if side == "a" and ch.pake_b:
         out["peer_pake_msg"] = ch.pake_b
     return out
+
+
+# --------------------------------------------------------------------------- ack
+@tool(
+    name="channel_ack",
+    title="Acknowledge the paired agent's messages after processing them",
+    summary=(
+        "Use the local client at https://handover.tools/client/channel.py rather than calling this by hand. "
+        "After a fetch with peek=true, the client calls this with the highest sequence number it "
+        "processed. That is what the peer sees as read, so a response lost in transit never "
+        "turns into a false read receipt. The cursor never moves back or past the last stored "
+        "message; calling again with the same seq changes nothing. Slides the channel's expiry."
+    ),
+    path="/api/channel/ack",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "key": {"type": "string", "description": "This side's channel key."},
+            "seq": {"type": "integer", "description": "Highest sequence number this side processed."},
+        },
+        "required": ["key", "seq"],
+    },
+    examples=["uv run channel.py fetch --name study   # fetches with peek, then acks"],
+    keyed=True,
+)
+async def channel_ack(args, env):
+    await ensure_schema(env)
+    try:
+        seq = int(args.get("seq"))
+    except (TypeError, ValueError):
+        seq = -1
+    if seq < 0:
+        return {"cursor": None, "reason": "seq must be a non-negative integer."}
+    ch, side = await _resolve(env, args)
+    if not ch:
+        return {"cursor": None, **_GONE}
+    op = await _take_op(env, ch.id)
+    if not op["ok"]:
+        return {"cursor": None, "reason": f"channel_daily_ops_exhausted ({_DAILY_OPS}/day)"}
+
+    mine, theirs = ("cursor_a", "cursor_b") if side == "a" else ("cursor_b", "cursor_a")
+    now = int(time.time())
+    # MIN(seq, next_seq): an ack can't run ahead of stored messages, or a message sent later would
+    # show its sender as read the moment it arrives. Same expiry rule as fetch (spec/channel §7.4).
+    # mine can only be one of two constants, never input, so putting it in the SQL is safe.
+    row = await env.DB.prepare(
+        f"UPDATE channels SET {mine}=MAX({mine}, MIN(?1, next_seq)), touched_at=?2,"
+        f" expires_at=CASE WHEN pake_b IS NULL THEN expires_at"
+        f" ELSE MIN(?2 + ?3, hard_expires_at) END"
+        f" WHERE id=?4 RETURNING {mine} AS c, {theirs} AS t, next_seq AS n, expires_at AS e"
+    ).bind(seq, now, _IDLE_TTL, ch.id).first()
+    if not row:
+        return {"cursor": None, **_GONE}
+    return {"cursor": int(row.c), "peer_read_seq": int(row.t),
+            "messages_left": _MAX_MESSAGES - int(row.n), "expires_at": _iso(row.e), "reason": None}
 
 
 # --------------------------------------------------------------------------- close
